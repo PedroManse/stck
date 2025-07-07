@@ -1,6 +1,7 @@
 use super::*;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::rc::Rc;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -125,6 +126,7 @@ impl TypedFnPart {
 }
 
 pub enum TypeTesterEq {
+    Structure(Rc<UserStructDef>),
     Float,
     Generic,
     Any,
@@ -191,6 +193,7 @@ pub enum TypeTester {
     Result(Box<(TypeTester, TypeTester)>),
     Option(Box<TypeTester>),
     Closure(TypedFnPart, TypedFnPart),
+    Structure(Rc<UserStructDef>),
 }
 
 impl FromStr for TypeTester {
@@ -438,6 +441,7 @@ impl TypeTester {
     #[must_use]
     pub fn as_eq(&self) -> TypeTesterEq {
         match self {
+            Self::Structure(e) => TypeTesterEq::Structure(Rc::clone(e)),
             Self::Float => TypeTesterEq::Float,
             Self::Any => TypeTesterEq::Any,
             Self::Char => TypeTesterEq::Char,
@@ -497,6 +501,7 @@ impl From<Vec<FnArgDef>> for TypedOutputs {
 impl From<&Value> for TypeTester {
     fn from(value: &internals::Value) -> Self {
         match value {
+            Value::Structure(e) => Self::Structure(Rc::clone(&e.def)),
             Value::Float(_) => Self::Float,
             Value::Char(_) => Self::Char,
             Value::Str(_) => Self::Str,

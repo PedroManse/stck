@@ -212,6 +212,7 @@ impl Context {
                 (MakeKeyword(buf, line_start), ')') => {
                     let kw = match buf.as_str().trim() {
                         "!" => RawKeyword::BubbleError,
+                        "struct" => RawKeyword::Structure,
                         "fn" => RawKeyword::Fn(FnScope::Local),
                         "fn*" => RawKeyword::Fn(FnScope::Global),
                         "fn-" => RawKeyword::Fn(FnScope::Isolated),

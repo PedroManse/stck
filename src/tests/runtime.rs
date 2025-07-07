@@ -1,13 +1,13 @@
 use super::*;
 use crate::{
     api,
-    cache::{CacheHelper, NoCache},
+    cache::Isolated,
     error::Error,
     internals::{RuntimeContext, RustStckFn, Value},
 };
 
 fn execute_string(cont: &str, test_name: &str) -> Result<RuntimeContext, Error> {
-    let mut file_cacher = CacheHelper::new();
+    let mut file_cacher = Isolated::new();
     let tokens = api::get_tokens_str(cont, test_name, &mut file_cacher)?;
     let code = api::parse_raw_tokens(tokens)?;
     let mut runtime = RuntimeContext::new();
@@ -17,13 +17,14 @@ fn execute_string(cont: &str, test_name: &str) -> Result<RuntimeContext, Error> 
 
 #[test]
 fn rust_hook() -> Result<(), Error> {
-    let mut file_cacher = CacheHelper::new();
+    let mut file_cacher = Isolated::new();
     let tokens = api::get_tokens_str("\"7 3 -\n\" eval\n", "test rust hook", &mut file_cacher)?;
     let code = api::parse_raw_tokens(tokens)?;
     let mut runtime = RuntimeContext::new();
     let hook = RustStckFn::new("eval".to_string(), |ctx, source| {
         let st = ctx.stack.pop_this(Value::get_str).unwrap().unwrap();
-        let tokens = api::get_tokens_str(&st, format!("Eval at {source:?}"), &mut NoCache).unwrap();
+        let tokens =
+            api::get_tokens_str(&st, format!("Eval at {source:?}"), &mut Isolated::new()).unwrap();
         let code = api::parse_raw_tokens(tokens).unwrap();
         ctx.execute_entire_code(&code).unwrap();
     });
@@ -62,5 +63,106 @@ fn closure_parent_args() -> Result<(), Error> {
     let stack = ctx.get_stack();
     let expected_stack = [Value::Num(8), Value::Num(-1)];
     test_eq!(got: stack, expected: expected_stack);
+    Ok(())
+}
+
+#[test]
+fn structure_usage_copy() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    let code = r#"
+(fn) [a b] flip {b a}
+(fn) [a b c] rot3 { c a b }
+(struct) Person [
+  name<str>
+  age<num>
+  job<option<str>>
+]
+
+"Manse" 19 "developer" some Person$new
+Person$copy$age
+
+"Ravi" 2 none Person$new
+Person$copy$age
+
+flip rot3 -
+"#;
+    let code = api::get_tokens_str(code, "structure_usage_copy code", &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+    runtime.execute_entire_code(&code)?;
+    let out = runtime.stack.pop_this(Value::get_num);
+    assert_eq!(out, Some(Ok(17)));
+    Ok(())
+}
+
+#[test]
+fn structure_usage_swap() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    let code = r#"
+(struct) Person [
+  name<str>
+  age<num>
+  job<option<str>>
+]
+
+"Manse" 19 "developer" some Person$new
+20 Person$swap$age
+
+"#;
+    let code = api::get_tokens_str(code, "structure_usage_swap code", &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+    runtime.execute_entire_code(&code)?;
+    let out = runtime.stack.pop_this(Value::get_num);
+    assert_eq!(out, Some(Ok(19)));
+    Ok(())
+}
+
+#[test]
+fn structure_usage_set() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    let code = r#"
+(struct) Person [
+  name<str>
+  age<num>
+  job<option<str>>
+]
+
+"Manse" 19 "developer" some Person$new
+20 Person$set$age
+Person$copy$age
+
+"#;
+    let code = api::get_tokens_str(code, "structure_usage_set code", &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+    runtime.execute_entire_code(&code)?;
+    let out = runtime.stack.pop_this(Value::get_num);
+    assert_eq!(out, Some(Ok(20)));
+    Ok(())
+}
+
+#[test]
+fn structure_usage_explode() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    let code = r#"
+(struct) Person [
+  name<str>
+  age<num>
+  job<option<str>>
+]
+
+"Manse" 19 "developer" some Person$new Person$explode
+
+"#;
+    let code = api::get_tokens_str(code, "structure_usage_set code", &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+    runtime.execute_entire_code(&code)?;
+    let out = runtime.stack.pop_this(Value::get_option);
+    assert_eq!(
+        out,
+        Some(Ok(Some(Box::new(Value::Str("developer".to_string())))))
+    );
     Ok(())
 }

@@ -23,6 +23,11 @@ pub enum State {
     MakeFnName(FnScope, FnArgs, Vec<FnArgDef>),
     MakeFnBlock(FnScope, FnArgs, FnName, Option<Vec<FnArgDef>>),
 
+    MakeStructureName,
+    MakeStructureBody {
+        name: String,
+    },
+
     MakeSwitch(Vec<SwitchCase>),
     MakeSwitchCode(Vec<SwitchCase>, Value),
 
@@ -104,6 +109,16 @@ impl<'p> Context<'p> {
                 }
                 (Nothing, Keyword(RawKeyword::FnIntoClosure { fn_name })) => {
                     push_expr!(E::Keyword(KeywordKind::IntoClosure { fn_name }));
+                    Nothing
+                }
+                (Nothing, Keyword(RawKeyword::Structure)) => MakeStructureName,
+
+                (MakeStructureName, Ident(name)) => {
+                    // TODO: assert name ends with '$'
+                    MakeStructureBody { name }
+                }
+                (MakeStructureBody { name }, FnArgs(vars)) => {
+                    push_expr!(E::Keyword(KeywordKind::Structure { name, vars }));
                     Nothing
                 }
 

@@ -56,6 +56,7 @@ impl Display for TypeTester {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         use TypeTester::*;
         match self {
+            Structure(s) => write!(f, "structure {}", s.name),
             Float => write!(f, "float"),
             Any => write!(f, "?"),
             Char => write!(f, "char"),
@@ -99,6 +100,7 @@ impl Display for ExprCont {
             Self::Keyword(k) => {
                 write!(f, "Keyword: ")?;
                 match k {
+                    KeywordKind::Structure { name, .. } => write!(f, "Struct {name}"),
                     KeywordKind::Require(mn) => write!(f, "Require module {mn}"),
                     KeywordKind::DefinedGeneric(g) => write!(f, "Define generic {g:?}"),
                     KeywordKind::Break => write!(f, "Break"),
@@ -207,7 +209,10 @@ impl Display for parse::State {
             Self::MakeFnArgs(..) => "Making function, awaiting args",
             Self::MakeFnNameOrOutArgs(..) => "Making function, awaiting name or output args",
             Self::MakeFnName(..) => "Making function, awaiting name",
-            Self::MakeFnBlock(..) => "MakeWhile function, awaiting code block to execute",
+            Self::MakeFnBlock(..) => "Make function, awaiting code block to execute",
+
+            Self::MakeStructureName => "Make structure def, awaiting name",
+            Self::MakeStructureBody { .. } => "Make struct def, awaiting values",
 
             Self::MakeSwitch(..) => "Making switch case, awaiting value to match",
             Self::MakeSwitchCode(..) => "Making switch case, awaiting code block to execute",
@@ -224,9 +229,42 @@ impl Display for parse::State {
     }
 }
 
+impl Display for UserStructDef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {{ ", self.name.italic())?;
+        let last_index = self.fields.len() - 1;
+        for (index, def) in self.fields.iter().enumerate() {
+            if index == last_index {
+                write!(f, "{}: {} ", def.name, def.type_check)?;
+            } else {
+                write!(f, "{}: {}, ", def.name, def.type_check)?;
+            }
+        }
+        write!(f, "}}")
+    }
+}
+
+impl Display for UserStructInstance {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {{ ", self.def.name.italic())?;
+        let last_index = self.def.fields.len() - 1;
+        for (index, (def, val)) in self.def.fields.iter().zip(&self.fields).enumerate() {
+            if index == last_index {
+                write!(f, "{}: {} ", def.name, val)?;
+            } else {
+                write!(f, "{}: {}, ", def.name, val)?;
+            }
+        }
+        write!(f, "}}")
+    }
+}
+
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Value::Structure(s) => {
+                write!(f, "{}", s)
+            }
             Value::Result(r) => match r.as_ref() {
                 Result::Ok(t) => write!(f, "{}<{}>", "Ok".bright_yellow(), t),
                 Result::Err(e) => write!(f, "{}<{}>", "Error".bright_yellow(), e),
