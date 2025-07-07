@@ -263,7 +263,7 @@ impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Structure(s) => {
-                write!(f, "{}", s)
+                write!(f, "{s}")
             }
             Value::Result(r) => match r.as_ref() {
                 Result::Ok(t) => write!(f, "{}<{}>", "Ok".bright_yellow(), t),

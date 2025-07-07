@@ -228,10 +228,10 @@ impl Context {
                 ControlFlow::Continue
             }
             KeywordKind::Require(module_name) => {
-                return if !self.enabled_modules.contains(module_name) {
-                    Err(RuntimeErrorKind::MissingModule(module_name.to_owned()).into())
-                } else {
+                return if self.enabled_modules.contains(module_name) {
                     Ok(ControlFlow::Continue)
+                } else {
+                    Err(RuntimeErrorKind::MissingModule(module_name.to_owned()).into())
                 };
             }
             KeywordKind::DefinedGeneric(trc) => {
@@ -356,10 +356,9 @@ impl Context {
         let (method, stct) = self
             .user_structures
             .iter()
-            .filter_map(|stct| Some((stct.is_method_of(&name)?, Rc::clone(stct))))
-            .next()?;
+            .find_map(|stct| Some((stct.is_method_of(name)?, Rc::clone(stct))))?;
         Some(match method {
-            Ok(m) => self.execute_method(m, stct),
+            Ok(m) => self.execute_method(m, &stct),
             Err(e) => Err(e.into_runtime_error_kind(name.to_string())),
         })
     }
@@ -367,15 +366,15 @@ impl Context {
     fn execute_method(
         &mut self,
         method: UserStructMethod,
-        stct: Rc<UserStructDef>,
+        stct: &Rc<UserStructDef>,
     ) -> Result<(), RuntimeErrorKind> {
         match method {
             UserStructMethod::New => {
                 let values = self
                     .stack
                     .popn(stct.fields_count())
-                    .ok_or(RuntimeErrorKind::NotEnoughArgsForNew(Rc::clone(&stct)))?;
-                let si = UserStructDef::make_instance(&stct, values)?;
+                    .ok_or(RuntimeErrorKind::NotEnoughArgsForNew(Rc::clone(stct)))?;
+                let si = UserStructDef::make_instance(stct, values)?;
                 self.stack.push_this(si);
             }
             UserStructMethod::Explode => {
@@ -386,7 +385,7 @@ impl Context {
                 let si = stack_pop!((self.stack) -> &struct as "struct" for "struct$copy")?;
                 let value = si.fields.get(field_index).cloned().ok_or(
                     RuntimeErrorKind::DEVWrongIndexOnUserStructField(
-                        Rc::clone(&stct),
+                        Rc::clone(stct),
                         meth,
                         field_index,
                         Box::new(si.clone()),
@@ -403,13 +402,13 @@ impl Context {
                         Box::new(val.clone()),
                         Box::new(e),
                         UserStructMethod::Swap(field_index, Rc::clone(&field_type)),
-                        Rc::clone(&stct),
+                        Rc::clone(stct),
                     )
                 })?;
                 let mut instance = stack_pop!((self.stack) -> struct as "si" for "struct$swap")?;
                 let val = instance.swap_field(field_index, val).ok_or(
                     RuntimeErrorKind::DEVWrongIndexOnUserStructField(
-                        Rc::clone(&stct),
+                        Rc::clone(stct),
                         UserStructMethod::Swap(field_index, field_type),
                         field_index,
                         Box::new(instance.clone()),
@@ -426,13 +425,13 @@ impl Context {
                         Box::new(val.clone()),
                         Box::new(e),
                         UserStructMethod::Set(field_index, Rc::clone(&field_type)),
-                        Rc::clone(&stct),
+                        Rc::clone(stct),
                     )
                 })?;
                 let mut instance = stack_pop!((self.stack) -> struct as "si" for "struct$set")?;
                 instance.swap_field(field_index, val).ok_or(
                     RuntimeErrorKind::DEVWrongIndexOnUserStructField(
-                        Rc::clone(&stct),
+                        Rc::clone(stct),
                         UserStructMethod::Set(field_index, field_type),
                         field_index,
                         Box::new(instance.clone()),
@@ -442,9 +441,9 @@ impl Context {
             }
             UserStructMethod::Take(field_index) => {
                 let instance = stack_pop!((self.stack) -> struct as "si" for "struct$set")?;
-                let v = instance.fields.iter().nth(field_index).ok_or(
+                let v = instance.fields.get(field_index).ok_or(
                     RuntimeErrorKind::DEVWrongIndexOnUserStructField(
-                        Rc::clone(&stct),
+                        Rc::clone(stct),
                         UserStructMethod::Take(field_index),
                         field_index,
                         Box::new(instance.clone()),
@@ -452,7 +451,7 @@ impl Context {
                 )?;
                 self.stack.push_this(v.clone());
             }
-        };
+        }
         Ok(())
     }
 
@@ -468,10 +467,7 @@ impl Context {
             self.rust_fns.clone(),
             self.trc.clone(),
             self.enabled_modules.clone(),
-            self.user_structures
-                .iter()
-                .map(|def| Rc::clone(def))
-                .collect(),
+            self.user_structures.iter().map(Rc::clone).collect(),
         );
         cl_ctx.execute_code(&closure.code, source)?;
         let output = cl_ctx.take_stack().into_vec();
@@ -540,10 +536,7 @@ impl Context {
             self.rust_fns.clone(),
             self.trc.clone(),
             self.enabled_modules.clone(),
-            self.user_structures
-                .iter()
-                .map(|def| Rc::clone(def))
-                .collect(),
+            self.user_structures.iter().map(Rc::clone).collect(),
         );
 
         // handle (return) kw and RT errors inside functions

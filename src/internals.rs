@@ -434,6 +434,7 @@ pub enum MethodErrorPart {
 }
 
 impl MethodErrorPart {
+    #[must_use]
     pub fn into_runtime_error_kind(self, original_call: String) -> RuntimeErrorKind {
         (match self {
             Self::NoSuchField => RuntimeErrorKind::NoSuchField,
@@ -464,9 +465,11 @@ impl UserStructDef {
             fields: values,
         })
     }
+    #[must_use]
     pub fn fields_count(&self) -> usize {
         self.fields.len()
     }
+    #[must_use]
     pub fn is_method_of(
         &self,
         method_name: &str,
