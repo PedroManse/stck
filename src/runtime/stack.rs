@@ -1,4 +1,7 @@
 macro_rules! sget {
+    (struct) => {
+        (Value::get_struct, Value::get_ref_structure, "Structure")
+    };
     (float) => {
         (Value::get_float, Value::get_ref_float, "Float")
     };
@@ -27,7 +30,7 @@ macro_rules! sget {
         (Value::get_closure, Value::get_ref_closure, "Closure")
     };
 }
-pub(super) use sget;
+pub(crate) use sget;
 
 macro_rules! stack_pop {
     (($stack:expr) -> $type:ident as $this_arg:literal for $fn_name:expr) => {
@@ -99,4 +102,4 @@ macro_rules! stack_pop {
             })
     };
 }
-pub(super) use stack_pop;
+pub(crate) use stack_pop;

@@ -6,6 +6,7 @@ use colored::Colorize;
 use std::collections::hash_map::HashMap;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -303,8 +304,32 @@ pub enum RuntimeErrorKind {
         closure_args: Box<ClosurePartialArgs>,
         parent_args: HashMap<ArgName, FnArg>,
     },
+    #[error(
+        "DEV ERROR, this error should never appear to you:\nThe struct {0}, with method {1:?}, tried using field with index {2}; {3}"
+    )]
+    DEVWrongIndexOnUserStructField(
+        Rc<UserStructDef>,
+        UserStructMethod,
+        usize,
+        Box<UserStructInstance>,
+    ),
     #[error("No such function or function argument called `{0}`")]
     MissingIdent(String),
     #[error("Module `{0}` is required but was not loaded")]
     MissingModule(String),
+    #[error("Method {0}'s fieldless action doesn't exist")]
+    NoSuchFieldlessAction(String),
+    #[error("Method {0}'s field doesn't exist")]
+    NoSuchField(String),
+    #[error("Method {0}'s action doesn't exist")]
+    NoSuchAction(String),
+    #[error("Not enough arguments to make {0}")]
+    NotEnoughArgsForNew(Rc<UserStructDef>),
+    #[error("Wrong value, {0}, for type {1}, while doing {2:?} on {3}")]
+    WrongTypeForMethod(
+        Box<Value>,
+        Box<TypeTester>,
+        UserStructMethod,
+        Rc<UserStructDef>,
+    ),
 }

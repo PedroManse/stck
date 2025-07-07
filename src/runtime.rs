@@ -7,6 +7,7 @@ use crate::*;
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::rc::Rc;
 
 #[derive(thiserror::Error, Debug)]
 enum RuntimeError {
@@ -58,20 +59,13 @@ pub struct Context {
     rust_fns: HashMap<FnName, Hook>,
     trc: TypeResolutionBuilder,
     enabled_modules: HashSet<String>,
+    user_structures: HashSet<Rc<UserStructDef>>,
 }
 
 impl Context {
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            fns: HashMap::new(),
-            vars: HashMap::new(),
-            stack: Stack::new(),
-            rust_fns: HashMap::new(),
-            args: None,
-            trc: TypeResolutionBuilder::new(),
-            enabled_modules: HashSet::new(),
-        }
+        Self::default()
     }
 
     pub fn add_module(&mut self, module: module::Module) {
@@ -105,6 +99,7 @@ impl Context {
         rust_fns: HashMap<FnName, Hook>,
         trc: TypeResolutionBuilder,
         enabled_modules: HashSet<String>,
+        user_structures: HashSet<Rc<UserStructDef>>,
     ) -> Self {
         let (stack, args) = match args_ins {
             FnArgsInsCap::AllStack(xs) => (Stack::new_with(xs), None),
@@ -118,6 +113,7 @@ impl Context {
             rust_fns,
             trc,
             enabled_modules,
+            user_structures,
         }
     }
 
@@ -128,6 +124,7 @@ impl Context {
         rust_fns: HashMap<FnName, Hook>,
         trc: TypeResolutionBuilder,
         enabled_modules: HashSet<String>,
+        user_structures: HashSet<Rc<UserStructDef>>,
     ) -> Self {
         Self {
             enabled_modules,
@@ -137,6 +134,7 @@ impl Context {
             vars,
             args: Some(args),
             stack: Stack::new(),
+            user_structures,
         }
     }
 
@@ -221,11 +219,19 @@ impl Context {
 
     fn execute_kw(&mut self, kw: &KeywordKind, source: &Path) -> MixedResult<ControlFlow> {
         Ok(match kw {
+            KeywordKind::Structure { name, vars } => {
+                let stct = UserStructDef {
+                    name: name.to_string(),
+                    fields: vars.iter().cloned().map(UserStructField::from).collect(),
+                };
+                self.user_structures.insert(Rc::new(stct));
+                ControlFlow::Continue
+            }
             KeywordKind::Require(module_name) => {
-                return if !self.enabled_modules.contains(module_name) {
-                    Err(RuntimeErrorKind::MissingModule(module_name.to_owned()).into())
-                } else {
+                return if self.enabled_modules.contains(module_name) {
                     Ok(ControlFlow::Continue)
+                } else {
+                    Err(RuntimeErrorKind::MissingModule(module_name.to_owned()).into())
                 };
             }
             KeywordKind::DefinedGeneric(trc) => {
@@ -338,8 +344,113 @@ impl Context {
             self.stack.pushn(rets?);
         } else if let Some(res) = self.try_execute_rust_hook(name, source) {
             res?;
+        } else if let Some(res) = self.try_execute_method(name) {
+            res?;
         } else {
             return Err(Rtk::MissingIdent(name.clone()).into());
+        }
+        Ok(())
+    }
+
+    fn try_execute_method(&mut self, name: &FnName) -> Option<Result<(), RuntimeErrorKind>> {
+        let (method, stct) = self
+            .user_structures
+            .iter()
+            .find_map(|stct| Some((stct.is_method_of(name)?, Rc::clone(stct))))?;
+        Some(match method {
+            Ok(m) => self.execute_method(m, &stct),
+            Err(e) => Err(e.into_runtime_error_kind(name.to_string())),
+        })
+    }
+
+    fn execute_method(
+        &mut self,
+        method: UserStructMethod,
+        stct: &Rc<UserStructDef>,
+    ) -> Result<(), RuntimeErrorKind> {
+        match method {
+            UserStructMethod::New => {
+                let values = self
+                    .stack
+                    .popn(stct.fields_count())
+                    .ok_or(RuntimeErrorKind::NotEnoughArgsForNew(Rc::clone(stct)))?;
+                let si = UserStructDef::make_instance(stct, values)?;
+                self.stack.push_this(si);
+            }
+            UserStructMethod::Explode => {
+                let si = stack_pop!((self.stack) -> struct as "struct" for "struct$explode")?;
+                self.stack.pushn(si.fields);
+            }
+            meth @ UserStructMethod::Copy(field_index) => {
+                let si = stack_pop!((self.stack) -> &struct as "struct" for "struct$copy")?;
+                let value = si.fields.get(field_index).cloned().ok_or(
+                    RuntimeErrorKind::DEVWrongIndexOnUserStructField(
+                        Rc::clone(stct),
+                        meth,
+                        field_index,
+                        Box::new(si.clone()),
+                    ),
+                )?;
+                self.stack.push(value);
+            }
+
+            UserStructMethod::Swap(field_index, field_type) => {
+                let mut trc: TypeResolutionContext = TypeResolutionBuilder::new().into();
+                let val = stack_pop!((self.stack) -> * as "value" for "struct$swap")?;
+                trc.check(&field_type, &val).map_err(|e| {
+                    RuntimeErrorKind::WrongTypeForMethod(
+                        Box::new(val.clone()),
+                        Box::new(e),
+                        UserStructMethod::Swap(field_index, Rc::clone(&field_type)),
+                        Rc::clone(stct),
+                    )
+                })?;
+                let mut instance = stack_pop!((self.stack) -> struct as "si" for "struct$swap")?;
+                let val = instance.swap_field(field_index, val).ok_or(
+                    RuntimeErrorKind::DEVWrongIndexOnUserStructField(
+                        Rc::clone(stct),
+                        UserStructMethod::Swap(field_index, field_type),
+                        field_index,
+                        Box::new(instance.clone()),
+                    ),
+                )?;
+                self.stack.push_this(instance);
+                self.stack.push(val);
+            }
+            UserStructMethod::Set(field_index, field_type) => {
+                let mut trc: TypeResolutionContext = TypeResolutionBuilder::new().into();
+                let val = stack_pop!((self.stack) -> * as "value" for "struct$set")?;
+                trc.check(&field_type, &val).map_err(|e| {
+                    RuntimeErrorKind::WrongTypeForMethod(
+                        Box::new(val.clone()),
+                        Box::new(e),
+                        UserStructMethod::Set(field_index, Rc::clone(&field_type)),
+                        Rc::clone(stct),
+                    )
+                })?;
+                let mut instance = stack_pop!((self.stack) -> struct as "si" for "struct$set")?;
+                instance.swap_field(field_index, val).ok_or(
+                    RuntimeErrorKind::DEVWrongIndexOnUserStructField(
+                        Rc::clone(stct),
+                        UserStructMethod::Set(field_index, field_type),
+                        field_index,
+                        Box::new(instance.clone()),
+                    ),
+                )?;
+                self.stack.push_this(instance);
+            }
+            UserStructMethod::Take(field_index) => {
+                let instance = stack_pop!((self.stack) -> struct as "si" for "struct$set")?;
+                let v = instance.fields.get(field_index).ok_or(
+                    RuntimeErrorKind::DEVWrongIndexOnUserStructField(
+                        Rc::clone(stct),
+                        UserStructMethod::Take(field_index),
+                        field_index,
+                        Box::new(instance.clone()),
+                    ),
+                )?;
+                self.stack.push_this(v.clone());
+            }
         }
         Ok(())
     }
@@ -356,6 +467,7 @@ impl Context {
             self.rust_fns.clone(),
             self.trc.clone(),
             self.enabled_modules.clone(),
+            self.user_structures.iter().map(Rc::clone).collect(),
         );
         cl_ctx.execute_code(&closure.code, source)?;
         let output = cl_ctx.take_stack().into_vec();
@@ -424,6 +536,7 @@ impl Context {
             self.rust_fns.clone(),
             self.trc.clone(),
             self.enabled_modules.clone(),
+            self.user_structures.iter().map(Rc::clone).collect(),
         );
 
         // handle (return) kw and RT errors inside functions

@@ -10,6 +10,7 @@ pub use runtime::module;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 #[cfg_attr(test, derive(PartialEq))]
 #[derive(Clone, Debug)]
@@ -385,9 +386,152 @@ pub enum Value {
     Option(Option<Box<Value>>),
     Closure(Box<Closure>),
     Float(f64),
+    Structure(UserStructInstance),
+}
+
+#[derive(Clone, Debug)]
+pub struct UserStructInstance {
+    pub(crate) def: Rc<UserStructDef>,
+    pub(crate) fields: Vec<Value>,
+}
+
+impl UserStructInstance {
+    pub(crate) fn swap_field(&mut self, index: usize, value: Value) -> Option<Value> {
+        let x = self.fields.get_mut(index)?;
+        Some(std::mem::replace(x, value))
+    }
+}
+
+impl PartialEq for UserStructInstance {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.def, &other.def)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct UserStructDef {
+    pub(crate) name: String,
+    pub(crate) fields: Vec<UserStructField>,
+}
+
+#[derive(Debug)]
+pub enum UserStructMethod {
+    New,
+    Copy(usize),
+    Take(usize),
+    Set(usize, Rc<TypeTester>),
+    Swap(usize, Rc<TypeTester>),
+    Explode,
+}
+
+pub enum MethodErrorPart {
+    /// Field doesn't exist
+    NoSuchField,
+    /// Action doesn't exist
+    NoSuchAction,
+    /// Fieldless action doesn't exist
+    NoSuchFieldlessAction,
+}
+
+impl MethodErrorPart {
+    #[must_use]
+    pub fn into_runtime_error_kind(self, original_call: String) -> RuntimeErrorKind {
+        (match self {
+            Self::NoSuchField => RuntimeErrorKind::NoSuchField,
+            Self::NoSuchAction => RuntimeErrorKind::NoSuchAction,
+            Self::NoSuchFieldlessAction => RuntimeErrorKind::NoSuchFieldlessAction,
+        })(original_call)
+    }
+}
+
+impl UserStructDef {
+    pub fn make_instance(
+        def: &Rc<UserStructDef>,
+        values: Vec<Value>,
+    ) -> Result<UserStructInstance, RuntimeErrorKind> {
+        let mut trc: TypeResolutionContext = TypeResolutionBuilder::new().into();
+        for (field_def, field_value) in def.fields.iter().zip(&values) {
+            trc.check(&field_def.type_check, field_value).map_err(|_| {
+                RuntimeErrorKind::WrongTypeForMethod(
+                    Box::new(field_value.clone()),
+                    Box::new(field_def.type_check.as_ref().clone()),
+                    UserStructMethod::New,
+                    Rc::clone(def),
+                )
+            })?;
+        }
+        Ok(UserStructInstance {
+            def: Rc::clone(def),
+            fields: values,
+        })
+    }
+    #[must_use]
+    pub fn fields_count(&self) -> usize {
+        self.fields.len()
+    }
+    #[must_use]
+    pub fn is_method_of(
+        &self,
+        method_name: &str,
+    ) -> Option<Result<UserStructMethod, MethodErrorPart>> {
+        let action_field = method_name
+            .strip_prefix(&self.name)
+            .and_then(|s| s.strip_prefix('$'))?;
+        Some(self.internal_is_method_of(action_field))
+    }
+    fn internal_is_method_of(
+        &self,
+        action_field: &str,
+    ) -> Result<UserStructMethod, MethodErrorPart> {
+        if let Some((action, field)) = action_field.split_once('$') {
+            let (field_index, field_info) = self
+                .get_field_info(field)
+                .ok_or(MethodErrorPart::NoSuchField)?;
+            Ok(match action {
+                "copy" => UserStructMethod::Copy(field_index),
+                "take" => UserStructMethod::Take(field_index),
+                "set" => UserStructMethod::Set(field_index, Rc::clone(&field_info.type_check)),
+                "swap" => UserStructMethod::Swap(field_index, Rc::clone(&field_info.type_check)),
+                _ => return Err(MethodErrorPart::NoSuchAction),
+            })
+        } else {
+            Ok(match action_field {
+                "new" => UserStructMethod::New,
+                "explode" => UserStructMethod::Explode,
+                _ => return Err(MethodErrorPart::NoSuchFieldlessAction),
+            })
+        }
+    }
+    fn get_field_info(&self, field_name: &str) -> Option<(usize, &UserStructField)> {
+        self.fields
+            .iter()
+            .enumerate()
+            .find(|(_, f)| f.name == field_name)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct UserStructField {
+    pub(crate) name: String,
+    pub(crate) type_check: Rc<TypeTester>,
+}
+
+impl From<FnArgDef> for UserStructField {
+    fn from(value: FnArgDef) -> Self {
+        UserStructField {
+            name: value.name,
+            type_check: Rc::new(value.type_check.unwrap_or(TypeTester::Any)),
+        }
+    }
 }
 
 impl Value {
+    pub fn get_struct(self) -> Result<UserStructInstance, Value> {
+        match self {
+            Value::Structure(s) => Ok(s),
+            e => Err(e),
+        }
+    }
     pub fn get_float(self) -> Result<f64, Value> {
         match self {
             Value::Float(n) => Ok(n),
@@ -443,6 +587,12 @@ impl Value {
         }
     }
 
+    pub fn get_ref_structure(&self) -> Result<&UserStructInstance, &Value> {
+        match self {
+            Value::Structure(n) => Ok(n),
+            o => Err(o),
+        }
+    }
     pub fn get_ref_float(&self) -> Result<&f64, &Value> {
         match self {
             Value::Float(n) => Ok(n),
@@ -517,6 +667,12 @@ impl From<Option<Value>> for Value {
     }
 }
 
+impl From<UserStructInstance> for Value {
+    fn from(value: UserStructInstance) -> Self {
+        Value::Structure(value)
+    }
+}
+
 impl From<String> for Value {
     fn from(value: String) -> Self {
         Value::Str(value)
@@ -563,6 +719,10 @@ pub struct CondBranch {
 #[cfg_attr(test, derive(PartialEq))]
 #[derive(Clone, Debug)]
 pub enum KeywordKind {
+    Structure {
+        name: String,
+        vars: Vec<FnArgDef>,
+    },
     IntoClosure {
         fn_name: FnName,
     },
@@ -623,6 +783,7 @@ pub enum ControlFlow {
 #[cfg_attr(test, derive(PartialEq))]
 #[derive(Debug)]
 pub enum RawKeyword {
+    Structure,
     FnIntoClosure { fn_name: FnName },
     BubbleError,
     Return,
