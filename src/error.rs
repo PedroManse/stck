@@ -229,7 +229,7 @@ pub enum RuntimeErrorKind {
     #[error("Switch case with no value")]
     SwitchCaseWithNoValue,
     #[error(
-        "`%%` ({0}) doesn't recognise the format directive `{1}`, only '%', 'd', 's', 'v' and 'b' are avaliable"
+        "`%%` ({0}) doesn't recognise the format directive `{1}`, only '%', 'd', 's', 'v', 'V' and 'b' are avaliable"
     )]
     UnknownStringFormat(String, char),
     #[error("`%%` ({0}) Can't capture any value, the stack is empty")]

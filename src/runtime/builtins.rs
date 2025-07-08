@@ -80,6 +80,14 @@ fn fmt_internal(cont: &str, stack: &mut Stack) -> Result<String, FmtError> {
                 out.push_str(&fmt);
                 State::Nothing
             }
+            (State::OnFmt, 'V') => {
+                let fmt = match stack.pop() {
+                    Some(x) => format!("{x}"),
+                    None => "<Nothing in stack>".to_string(),
+                };
+                out.push_str(&fmt);
+                State::Nothing
+            }
             (State::OnFmt, 'b') => {
                 let add_bool = stack_pop!(=(stack) -> bool? as "%b" for "%%")
                     .ok_or(FmtError::MissingValue('b'))?
