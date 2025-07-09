@@ -17,6 +17,15 @@ enum RuntimeError {
     RuntimeRaw(#[from] RuntimeErrorKind),
 }
 
+impl RuntimeError {
+    fn add_ctx(self, ctx: ErrCtx) -> RuntimeErrorCtx {
+        match self {
+            RuntimeError::RuntimeRaw(e) => RuntimeErrorCtx::new(ctx, e),
+            RuntimeError::RuntimeCtx(c) => c.append_stack(ctx),
+        }
+    }
+}
+
 type Rtk = crate::error::RuntimeErrorKind;
 type CResult<T> = std::result::Result<T, error::RuntimeErrorCtx>;
 type MixedResult<T> = std::result::Result<T, RuntimeError>;
@@ -182,13 +191,8 @@ impl Context {
     }
 
     fn execute_expr(&mut self, expr: &Expr, source: &Path) -> CResult<ControlFlow> {
-        match self.execute_expr_internal(expr, source) {
-            Ok(c) => Ok(c),
-            Err(RuntimeError::RuntimeRaw(e)) => {
-                Err(RuntimeErrorCtx::new(ErrCtx::new(source, expr), e))
-            }
-            Err(RuntimeError::RuntimeCtx(c)) => Err(c.append_stack(ErrCtx::new(source, expr))),
-        }
+        self.execute_expr_internal(expr, source)
+            .map_err(|e| e.add_ctx(ErrCtx::new(source, expr)))
     }
 
     fn execute_expr_internal(&mut self, expr: &Expr, source: &Path) -> MixedResult<ControlFlow> {
