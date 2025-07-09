@@ -1,26 +1,40 @@
 //! # Caching systems
 //!
-//! It is common for complex programs to import a file more than once. Not only that, but
-//! [`ErrCtx`] uses [`FileCacher::get_span`] to show the faulty lines in case of error, and
-//! re-reading the content is necessary for this. so caching systems have been created to ease the
-//! IO load.
+//! ## Why
+//! 1. To ease IO load
+//! 2. More host control
 //!
-//! They have also been created to allow for better control over the operating system from the
+//! 1: It is common for complex programs to import a file more than once. Not only that, but
+//! [`ErrCtx`] needs access to the source file's contents after an execution error, to show falty
+//! lines.
+//!
+//! 2: They have also been created to allow for better control over the operating system from the
 //! host, since some caching systems need files to be alloed by the host instead of loaded at the
 //! user's every whim.
 //!
+//! ## Recommended usage
+//! |    Use Case    | Caching system  |
+//! |----------------|-----------------|
+//! | Untrusted code | [`Isolated`]    |
+//! | Trusted code   | [`CacheHelper`] |
+//!
+//! ## Details
 //! The simplest system is [`CacheHelper`], which caches all files and allow everything to be read.
 //!
 //! The most controlled system is [`Isolated`], which only allows previously-read files determined
 //! by the host to be accessed.
 //!
-//! In case of testing, [`MockFileCacher`] is sugested, since you can easly mock the existence of
-//! files with [mock_file](MockFileCacher::mock_file).
+//! I case of testing, a system's [`OverwriteCache`] might be used, since it allows overwriting
+//! entires in the cache's internal system.
+//!
 
 use crate::*;
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 use std::path::{Path, PathBuf};
 
+/// # A file caching system
+///
+/// Every non-runtime initiaded interaction with files must use a caching system to be executed.
 pub trait FileCacher {
     type FileRecord<'s>: AsRef<str>
     where
@@ -108,9 +122,10 @@ impl FileCacher for NoCache {
 
 /// # Mocked file system
 ///
-/// Files can be mocked with [mock_file](MockFileCacher::mock_file)
+/// A system's [`OverwriteCache`] should be used instead
 ///
-/// If a file wasan't mocked, [`CacheHelper`] is used as a fallback
+/// ~Files can be mocked with [mock_file](MockFileCacher::mock_file).~
+/// ~If a file wasan't mocked, [CacheHelper] is used as a fallback~
 #[derive(Default)]
 #[deprecated]
 pub struct MockFileCacher(CacheHelper);
@@ -146,10 +161,14 @@ impl FileCacher for MockFileCacher {
 
 /// # The Isolated cache system
 ///
-/// Only filed specified by [add_file_cached](Isolated::add_file_cached) or
-/// (force_add_file)[Isolated::force_add_file] can be read by the user.
+/// Only filed specified by [`add_file_cached`](Isolated::add_file_cached) or
+/// [`force_add_file`](Isolated::force_add_file) can be read by the user.
 ///
 /// This is recomended in case of execution of untrusted code.
+///
+/// This system's native overwriting methods should be favored instead of the [`OverwriteCache`]
+/// implementation, since they consume the [`PathBuf`] they recieve, but the trait has to allocate
+/// and create one.
 #[derive(Default)]
 pub struct Isolated {
     allowed: HashMap<PathBuf, String>,
