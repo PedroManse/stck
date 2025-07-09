@@ -197,10 +197,7 @@ fn ifs() -> Result<(), Error> {
         runtime.stack.push_this(input);
         runtime.execute_entire_code(&code)?;
         let out = runtime.stack.pop_this(Value::get_str);
-        assert_eq!(
-            out,
-            Some(Ok(expected_output.to_string()))
-        );
+        assert_eq!(out, Some(Ok(expected_output.to_string())));
     }
     Ok(())
 }
@@ -220,9 +217,6 @@ fn if_else() -> Result<(), Error> {
     let code = api::parse_raw_tokens(code)?;
     runtime.execute_entire_code(&code)?;
     let out = runtime.stack.pop_this(Value::get_str);
-    assert_eq!(
-        out,
-        Some(Ok("if code path".to_string()))
-    );
+    assert_eq!(out, Some(Ok("if code path".to_string())));
     Ok(())
 }
