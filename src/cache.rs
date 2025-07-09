@@ -25,6 +25,10 @@ pub trait FileCacher {
     }
 }
 
+pub trait OverwriteCache {
+    fn overwrite(&mut self, path: impl AsRef<Path>, content: String);
+}
+
 /// # Caching system for files
 ///
 /// Used with [Line range](LineRange) to read specific lines from files on [get span](ErrorHelper::get_span)
@@ -45,6 +49,12 @@ pub struct CachedFile<'s>(OccupiedEntry<'s, PathBuf, String>);
 impl AsRef<str> for CachedFile<'_> {
     fn as_ref(&self) -> &str {
         self.0.get()
+    }
+}
+
+impl OverwriteCache for CacheHelper {
+    fn overwrite(&mut self, path: impl AsRef<Path>, content: String) {
+        self.files.insert(path.as_ref().to_path_buf(), content);
     }
 }
 
@@ -78,18 +88,28 @@ impl FileCacher for NoCache {
 }
 
 #[derive(Default)]
+#[deprecated]
 pub struct MockFileCacher(CacheHelper);
 
+#[allow(deprecated)]
 impl MockFileCacher {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
     pub fn mock_file(&mut self, path: PathBuf, content: String) {
-        self.0.files.insert(path, content);
+        self.0.overwrite(path, content);
     }
 }
 
+#[allow(deprecated)]
+impl OverwriteCache for MockFileCacher {
+    fn overwrite(&mut self, path: impl AsRef<Path>, content: String) {
+        self.mock_file(path.as_ref().to_path_buf(), content);
+    }
+}
+
+#[allow(deprecated)]
 impl FileCacher for MockFileCacher {
     type FileRecord<'s> = CachedFile<'s>;
     fn read_file(
@@ -122,6 +142,12 @@ impl Isolated {
         let cont = std::fs::read_to_string(&path)?;
         self.allowed.insert(path, cont);
         Ok(())
+    }
+}
+
+impl OverwriteCache for Isolated {
+    fn overwrite(&mut self, path: impl AsRef<Path>, content: String) {
+        self.allowed.insert(path.as_ref().to_path_buf(), content);
     }
 }
 
