@@ -166,3 +166,63 @@ fn structure_usage_explode() -> Result<(), Error> {
     );
     Ok(())
 }
+
+#[test]
+fn ifs() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    let code = r#"
+(fn) [ a<T> ] [ <T> <T> ] dup { a a }
+
+(ifs) { dup 10 = } {
+    "It's ten"
+} { dup 12 = } {
+    "It's twelve"
+} { dup 14 = } {
+    "It's fourteen"
+} {
+    "IDK"
+}
+"#;
+    let code = api::get_tokens_str(code, "ifs code", &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+
+    let tests = [
+        (10, "It's ten"),
+        (12, "It's twelve"),
+        (14, "It's fourteen"),
+        (4, "IDK"),
+    ];
+    for (input, expected_output) in tests {
+        runtime.stack.push_this(input);
+        runtime.execute_entire_code(&code)?;
+        let out = runtime.stack.pop_this(Value::get_str);
+        assert_eq!(
+            out,
+            Some(Ok(expected_output.to_string()))
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn if_else() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    let code = r#"
+(ifs) { 10 10 = } {
+    "if code path"
+} {
+    "else code path"
+}
+"#;
+    let code = api::get_tokens_str(code, "if_else code", &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+    runtime.execute_entire_code(&code)?;
+    let out = runtime.stack.pop_this(Value::get_str);
+    assert_eq!(
+        out,
+        Some(Ok("if code path".to_string()))
+    );
+    Ok(())
+}
