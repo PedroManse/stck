@@ -5,12 +5,16 @@
 //! 2. More host control
 //!
 //! 1: It is common for complex programs to import a file more than once. Not only that, but
-//! [`ErrCtx`] needs access to the source file's contents after an execution error, to show falty
+//! [`ErrCtx`] needs access to the source file's contents after an execution error, to show faulty
 //! lines.
 //!
 //! 2: They have also been created to allow for better control over the operating system from the
 //! host, since some caching systems need files to be alloed by the host instead of loaded at the
 //! user's every whim.
+//!
+//! # How
+//! The caching trait, [`FileCacher`], is the middleware for every IO access outside of runtime
+//! usage.
 //!
 //! ## Recommended usage
 //! |    Use Case    | Caching system  |
@@ -24,7 +28,7 @@
 //! The most controlled system is [`Isolated`], which only allows previously-read files determined
 //! by the host to be accessed.
 //!
-//! I case of testing, a system's [`OverwriteCache`] might be used, since it allows overwriting
+//! In case of testing, any system's [`OverwriteCache`] might be used, since it allows overwriting
 //! entires in the cache's internal system.
 //!
 
@@ -62,9 +66,14 @@ pub trait OverwriteCache {
     fn overwrite(&mut self, path: impl AsRef<Path>, content: String);
 }
 
-/// # Caching system for files
+/// # Simple caching system for files
 ///
-/// Used with [Line range](LineRange) to read specific lines from files on [get span](FileCacher::get_span)
+/// The [`read_file`](struct.CacheHelper.html#method.read_file) method returns a [`CachedFile`]
+/// entry.
+///
+/// Every cache miss on `read_file` will read the entire file and save it into an internal hashmap
+///
+/// No deallocation of entries happens
 #[derive(Default)]
 pub struct CacheHelper {
     files: HashMap<PathBuf, String>,
@@ -77,6 +86,9 @@ impl CacheHelper {
     }
 }
 
+/// An entry for a file in a [`CacheHelper`]
+///
+/// Can be used with [`as_ref`](CachedFile::as_ref)
 pub struct CachedFile<'s>(OccupiedEntry<'s, PathBuf, String>);
 
 impl AsRef<str> for CachedFile<'_> {
@@ -109,6 +121,11 @@ impl FileCacher for CacheHelper {
     }
 }
 
+/// # Disabled cache
+///
+/// For systems with limited memory, perhaps
+///
+/// Truly, this system only exists for completeness
 pub struct NoCache;
 impl FileCacher for NoCache {
     type FileRecord<'s> = String;
@@ -120,7 +137,7 @@ impl FileCacher for NoCache {
     }
 }
 
-/// # Mocked file system
+/// # A mocked file system
 ///
 /// A system's [`OverwriteCache`] should be used instead
 ///
@@ -159,7 +176,7 @@ impl FileCacher for MockFileCacher {
     }
 }
 
-/// # The Isolated cache system
+/// # An isolated cache system
 ///
 /// Only filed specified by [`add_file_cached`](Isolated::add_file_cached) or
 /// [`force_add_file`](Isolated::force_add_file) can be read by the user.
