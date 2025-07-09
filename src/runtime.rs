@@ -283,13 +283,21 @@ impl Context {
                     None => ControlFlow::Continue,
                 }
             }
-            KeywordKind::Ifs { branches } => {
+            KeywordKind::Ifs {
+                branches,
+                otherwhise,
+            } => {
                 for branch in branches {
                     if self.execute_check(&branch.check, source)? {
                         return self
                             .execute_code(&branch.code, source)
                             .map_err(RuntimeError::from);
                     }
+                }
+                if let Some(else_code) = otherwhise {
+                    return self
+                        .execute_code(else_code, source)
+                        .map_err(RuntimeError::from);
                 }
                 ControlFlow::Continue
             }
