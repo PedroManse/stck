@@ -731,6 +731,7 @@ pub enum KeywordKind {
     BubbleError,
     Ifs {
         branches: Vec<CondBranch>,
+        otherwhise: Option<Vec<Expr>>,
     },
     While {
         check: Vec<Expr>,
