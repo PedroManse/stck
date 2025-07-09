@@ -1,3 +1,22 @@
+//! # Caching systems
+//!
+//! It is common for complex programs to import a file more than once. Not only that, but
+//! [`ErrCtx`] uses [`FileCacher::get_span`] to show the faulty lines in case of error, and
+//! re-reading the content is necessary for this. so caching systems have been created to ease the
+//! IO load.
+//!
+//! They have also been created to allow for better control over the operating system from the
+//! host, since some caching systems need files to be alloed by the host instead of loaded at the
+//! user's every whim.
+//!
+//! The simplest system is [`CacheHelper`], which caches all files and allow everything to be read.
+//!
+//! The most controlled system is [`Isolated`], which only allows previously-read files determined
+//! by the host to be accessed.
+//!
+//! In case of testing, [`MockFileCacher`] is sugested, since you can easly mock the existence of
+//! files with [mock_file](MockFileCacher::mock_file).
+
 use crate::*;
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 use std::path::{Path, PathBuf};
@@ -27,7 +46,7 @@ pub trait FileCacher {
 
 /// # Caching system for files
 ///
-/// Used with [Line range](LineRange) to read specific lines from files on [get span](ErrorHelper::get_span)
+/// Used with [Line range](LineRange) to read specific lines from files on [get span](FileCacher::get_span)
 #[derive(Default)]
 pub struct CacheHelper {
     files: HashMap<PathBuf, String>,
@@ -77,6 +96,11 @@ impl FileCacher for NoCache {
     }
 }
 
+/// # Mocked file system
+///
+/// Files can be mocked with [mock_file](MockFileCacher::mock_file)
+///
+/// If a file wasan't mocked, [`CacheHelper`] is used as a fallback
 #[derive(Default)]
 pub struct MockFileCacher(CacheHelper);
 
@@ -100,6 +124,12 @@ impl FileCacher for MockFileCacher {
     }
 }
 
+/// # The Isolated cache system
+///
+/// Only filed specified by [add_file_cached](Isolated::add_file_cached) or
+/// (force_add_file)[Isolated::force_add_file] can be read by the user.
+///
+/// This is recomended in case of execution of untrusted code.
 #[derive(Default)]
 pub struct Isolated {
     allowed: HashMap<PathBuf, String>,
@@ -110,6 +140,7 @@ impl Isolated {
     pub fn new() -> Self {
         Self::default()
     }
+    /// Read a file and cache it, if it doesn't already exist
     pub fn add_file_cached(&mut self, path: PathBuf) -> Result<(), std::io::Error> {
         let entry = self.allowed.entry(path);
         if let Entry::Vacant(entry) = entry {
@@ -118,6 +149,9 @@ impl Isolated {
         }
         Ok(())
     }
+    /// Read a file and cache it
+    ///
+    /// May overwrite entry of file with same path.
     pub fn force_add_file(&mut self, path: PathBuf) -> Result<(), std::io::Error> {
         let cont = std::fs::read_to_string(&path)?;
         self.allowed.insert(path, cont);

@@ -124,15 +124,9 @@ impl RuntimeErrorCtx {
 
 impl std::error::Error for RuntimeErrorCtx {}
 
-/// # The lines before and the amount of lines of a span
+/// # A range of lines
 ///
-/// Made from a [line span](LineSpan) and the span of interest with [`LineSpan::line_range`]
-///
-/// Will be formated as "`before`" optionally with `:+amount` in the end if the span covers more
-/// than one line. The result `before:+amount` can be used direcly with [bat](https://github.com/sharkdp/bat)
-///
-/// The [`LineRange`] can be used with an [`FileCacher`] to select specific lines to read from
-/// files
+/// The [`LineRange`] can be used with [`FileCacher`]'s [get_span](FileCacher::get_span) to select specific lines to read from
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct LineRange {
     pub(crate) start: usize,
