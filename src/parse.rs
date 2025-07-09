@@ -216,7 +216,10 @@ impl<'p> Context<'p> {
                             span: span.clone(),
                         }),
                     }
-                    push_expr!(E::Keyword(KeywordKind::Ifs { branches, otherwhise: Some(check) }));
+                    push_expr!(E::Keyword(KeywordKind::Ifs {
+                        branches,
+                        otherwhise: Some(check)
+                    }));
                     Nothing
                 }
                 (MakeIfs(branches), cont) => {
@@ -227,7 +230,10 @@ impl<'p> Context<'p> {
                             span: span.clone(),
                         }),
                     }
-                    push_expr!(E::Keyword(KeywordKind::Ifs { branches, otherwhise: None }));
+                    push_expr!(E::Keyword(KeywordKind::Ifs {
+                        branches,
+                        otherwhise: None
+                    }));
                     Nothing
                 }
 
