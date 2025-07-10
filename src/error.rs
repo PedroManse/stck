@@ -353,4 +353,6 @@ pub enum RuntimeErrorKind {
         UserStructMethod,
         Rc<UserStructDef>,
     ),
+    #[error("Tried to execute dissalowed action: {0}")]
+    DisallowedAction(runtime::UnauthorizedAction),
 }

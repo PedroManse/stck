@@ -11,6 +11,33 @@ use std::rc::Rc;
 
 use self::module::{IntoModules, Module};
 
+#[derive(Clone, Copy, Debug)]
+struct ExecAllowOptions {
+    print: bool,
+    closure: bool,
+    func: bool,
+    while_loop: bool,
+}
+
+#[derive(Debug)]
+pub enum UnauthorizedAction {
+    Print,
+    ExecuteClosure,
+    DeclareFunction,
+    WhileLoop,
+}
+
+impl Default for ExecAllowOptions {
+    fn default() -> Self {
+        Self {
+            print: true,
+            closure: true,
+            func: true,
+            while_loop: true,
+        }
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 enum RuntimeError {
     #[error(transparent)]
@@ -63,6 +90,7 @@ impl From<fn(&mut runtime::Context, &Path) -> Result<(), RuntimeErrorKind>> for 
 
 #[derive(Default, Debug)]
 pub struct Context {
+    options: ExecAllowOptions,
     vars: HashMap<String, Value>,
     fns: HashMap<FnName, FnDef>,
     pub stack: Stack,
@@ -118,48 +146,42 @@ impl Context {
     }
 
     fn frame_fn(
-        fns: HashMap<FnName, FnDef>,
+        ctx: &Context,
         vars: HashMap<String, Value>,
         args_ins: FnArgsInsCap,
-        rust_fns: HashMap<FnName, Hook>,
-        trc: TypeResolutionBuilder,
-        enabled_modules: HashSet<String>,
-        user_structures: HashSet<Rc<UserStructDef>>,
     ) -> Self {
         let (stack, args) = match args_ins {
             FnArgsInsCap::AllStack(xs) => (Stack::new_with(xs), None),
             FnArgsInsCap::Args(args) => (Stack::new(), Some(args)),
         };
         Self {
+            options: ctx.options,
+            fns: ctx.fns.clone(),
+            rust_fns: ctx.rust_fns.clone(),
+            trc: ctx.trc.clone(),
+            enabled_modules: ctx.enabled_modules.clone(),
+            user_structures: ctx.user_structures.clone(),
             vars,
-            fns,
             stack,
             args,
-            rust_fns,
-            trc,
-            enabled_modules,
-            user_structures,
         }
     }
 
     fn frame_closure(
-        fns: HashMap<FnName, FnDef>,
+        ctx: &Context,
         vars: HashMap<String, Value>,
         args: HashMap<ArgName, FnArg>,
-        rust_fns: HashMap<FnName, Hook>,
-        trc: TypeResolutionBuilder,
-        enabled_modules: HashSet<String>,
-        user_structures: HashSet<Rc<UserStructDef>>,
     ) -> Self {
         Self {
-            enabled_modules,
-            trc,
-            rust_fns,
-            fns,
+            options: ctx.options,
+            enabled_modules: ctx.enabled_modules.clone(),
+            trc: ctx.trc.clone(),
+            rust_fns: ctx.rust_fns.clone(),
+            fns: ctx.fns.clone(),
+            user_structures: ctx.user_structures.clone(),
             vars,
             args: Some(args),
             stack: Stack::new(),
-            user_structures,
         }
     }
 
@@ -489,13 +511,9 @@ impl Context {
         source: &Path,
     ) -> MixedResult<Vec<Value>> {
         let mut cl_ctx = Context::frame_closure(
-            self.fns.clone(),
+            &self,
             self.vars.clone(),
             closure.request_args,
-            self.rust_fns.clone(),
-            self.trc.clone(),
-            self.enabled_modules.clone(),
-            self.user_structures.iter().map(Rc::clone).collect(),
         );
         cl_ctx.execute_code(&closure.code, source)?;
         let output = cl_ctx.take_stack().into_vec();
@@ -558,13 +576,9 @@ impl Context {
             FnArgs::AllStack => FnArgsInsCap::AllStack(self.stack.take()),
         };
         let mut fn_ctx = Context::frame_fn(
-            self.fns.clone(),
+            self,
             vars,
             args,
-            self.rust_fns.clone(),
-            self.trc.clone(),
-            self.enabled_modules.clone(),
-            self.user_structures.iter().map(Rc::clone).collect(),
         );
 
         // handle (return) kw and RT errors inside functions
