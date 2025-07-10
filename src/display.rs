@@ -295,3 +295,13 @@ impl Display for Value {
         }
     }
 }
+
+impl Display for Stack {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[\n")?;
+        for v in self.as_slice() {
+            write!(f, "{v}\n")?;
+        }
+        write!(f, "]")
+    }
+}
