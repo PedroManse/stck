@@ -53,7 +53,7 @@ impl ErrCtx {
 /// made in bulk from the a [stack trace](ErrorSpans) with [try into sources](ErrorSpans::try_into_sources)
 ///
 /// Implemends Display by default to show:
-/// ```
+/// ```md
 /// ===[ {file}:{slice_start}:+{slice_size} ]===
 /// {file content}
 /// --------------------------------------------
