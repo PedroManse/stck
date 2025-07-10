@@ -64,6 +64,7 @@ where
 
 pub mod debug;
 pub mod io;
+pub mod map;
 
 #[deprecated]
 pub mod oficial {
@@ -77,6 +78,7 @@ pub fn builtin_modules() -> impl IntoModules {
     [
         debug::make(),
         io::make(),
+        map::make(),
     ]
 }
 

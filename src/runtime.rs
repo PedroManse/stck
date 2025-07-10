@@ -957,33 +957,6 @@ impl Context {
                 self.stack.push_this(v);
             }
 
-            // seq map
-            "map$new" => {
-                self.stack.push_this(HashMap::new());
-            }
-            "map$insert-kv" => {
-                let value = stack_pop!(
-                    (self.stack) -> * as "value" for fn_name
-                )?;
-                let key = stack_pop!(
-                    (self.stack) -> str as "key" for fn_name
-                )?;
-                let mut map = stack_pop!(
-                    (self.stack) -> map as "map" for fn_name
-                )?;
-                map.insert(key, value);
-                self.stack.push_this(map);
-            }
-            "map$get" => {
-                let key = stack_pop!(
-                    (self.stack) -> str as "key" for fn_name
-                )?;
-                let got = stack_pop!((self.stack) -> &map as "map" for fn_name)?
-                    .get(&key)
-                    .cloned();
-                self.stack.push_this(got);
-            }
-
             // seq type
             "type$is-str" => {
                 let is_type = stack_pop!((self.stack) -> str as "value" for fn_name).is_ok();
