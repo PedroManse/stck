@@ -1,22 +1,12 @@
 use crate::{
-    RuntimeContext, RuntimeErrorKind, StckError, Value,
     runtime::{Hook, module::Module, sget, stack_pop},
+    RuntimeContext, RuntimeErrorKind, StckError, Value,
 };
 use std::{io::Write, path::Path};
+use super::register;
 
-macro_rules! register {
-    ($mod:expr, $name:ident as |$ctx:ident| $fn:block) => {
-        fn $name($ctx: &mut RuntimeContext, _: &Path) -> Result<(), RuntimeErrorKind> $fn
-        $mod.add_fn(format!("io${}", stringify!($name)), Hook::WithError($name));
-    };
-    ($mod:expr, $name:ident as |$ctx:ident, $path: ident| $fn:block) => {
-        fn $name($ctx: &mut RuntimeContext, $path: &Path) -> Result<(), RuntimeErrorKind> $fn
-        $mod.add_fn(format!("io${}", stringify!($name)), Hook::WithError($name));
-    };
-}
-
-pub fn io_module() -> Result<Module, StckError> {
-    let mut io_mod = Module::new_protected("#io".to_string())?;
+pub fn io() -> Module {
+    let mut io_mod = Module::new_protected("io");
 
     register!(io_mod, read_file as |ctx| {
         let path = stack_pop!((ctx.stack) -> str as "file path" for "io$read-file")?;
@@ -67,5 +57,10 @@ pub fn io_module() -> Result<Module, StckError> {
         Ok(())
     });
 
-    Ok(io_mod)
+    io_mod
+}
+
+#[deprecated]
+pub fn io_module() -> Result<Module, StckError> {
+    Ok(io())
 }
