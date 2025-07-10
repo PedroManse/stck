@@ -1,6 +1,6 @@
+use super::Hook;
 use crate::{FnName, StckError};
 use std::collections::HashMap;
-use super::Hook;
 
 macro_rules! register {
     ($mod:expr, $name:ident as |$ctx:ident| $fn:block) => {
@@ -69,16 +69,12 @@ pub mod map;
 #[deprecated]
 pub mod oficial {
     pub use super::debug::make as debug;
-    pub use super::io::make as io;
     #[allow(deprecated)]
     pub use super::io::io_module;
+    pub use super::io::make as io;
 }
 
+#[must_use]
 pub fn builtin_modules() -> impl IntoModules {
-    [
-        debug::make(),
-        io::make(),
-        map::make(),
-    ]
+    [debug::make(), io::make(), map::make()]
 }
-

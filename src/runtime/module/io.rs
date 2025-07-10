@@ -1,9 +1,9 @@
+use super::register;
 use crate::{
-    runtime::{Hook, module::Module, sget, stack_pop},
     RuntimeContext, RuntimeErrorKind, StckError, Value,
+    runtime::{Hook, module::Module, sget, stack_pop},
 };
 use std::{io::Write, path::Path};
-use super::register;
 
 pub fn make() -> Module {
     let mut io_mod = Module::new_protected("io");
