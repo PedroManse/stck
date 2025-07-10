@@ -76,6 +76,13 @@ pub struct Context {
 impl Context {
     #[must_use]
     pub fn new() -> Self {
+        let mut ctx = Self::default();
+        ctx.register_module(module::builtin_modules());
+        ctx
+    }
+
+    #[must_use]
+    pub fn new_raw() -> Self {
         Self::default()
     }
 
