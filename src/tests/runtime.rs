@@ -1,6 +1,8 @@
+use std::path::PathBuf;
+
 use super::*;
 use crate::{
-    api,
+    ErrCtx, RuntimeErrorCtx, RuntimeErrorKind, api,
     cache::Isolated,
     error::Error,
     internals::{RuntimeContext, RustStckFn, Value},
@@ -218,5 +220,46 @@ fn if_else() -> Result<(), Error> {
     runtime.execute_entire_code(&code)?;
     let out = runtime.stack.pop_this(Value::get_str);
     assert_eq!(out, Some(Ok("if code path".to_string())));
+    Ok(())
+}
+
+#[test]
+fn runtime_stack() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    let code = "
+(fn) [ a b ] func-b { }
+(fn) [ v ] func-a { v func-b }
+
+10 func-a
+";
+    let source = PathBuf::from("error stack code");
+    let code = api::get_tokens_str(code, source.clone(), &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+    let error = runtime.execute_entire_code(&code);
+    assert_eq!(
+        Err(RuntimeErrorCtx {
+            ctx: ErrCtx::new(
+                &source,
+                &crate::Expr {
+                    span: crate::LineRange { start: 3, end: 3 },
+                    cont: crate::ExprCont::FnCall("func-b".to_string())
+                }
+            ),
+            kind: Box::new(RuntimeErrorKind::UserFnMissingArgs {
+                name: "func-b".to_string(),
+                got: vec![Value::Num(10)],
+                needs: vec!["a".to_string(), "b".to_string()]
+            }),
+            stack: vec![ErrCtx::new(
+                &source,
+                &crate::Expr {
+                    span: crate::LineRange { start: 5, end: 5 },
+                    cont: crate::ExprCont::FnCall("func-a".to_string())
+                }
+            )],
+        }),
+        error,
+    );
     Ok(())
 }

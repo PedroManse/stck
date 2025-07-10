@@ -8,6 +8,9 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+/// # The error of highest order of the stck lib
+///
+/// Keeps either a [`Runtime error`](RuntimeErrorCtx) of [another type of error](StckError)
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -23,6 +26,7 @@ pub enum Error {
 ///
 /// Useful to [get the source code of the error](ErrorSource)
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct ErrCtx {
     pub(crate) source: PathBuf,
     pub(crate) expr: Box<Expr>,
@@ -44,9 +48,9 @@ impl ErrCtx {
     }
 }
 
-/// # A single viewable source file
+/// # A viewable slice of a file
 ///
-/// made in bulk from the [stack trace](ErrorSpans) with [try into sources](ErrorSpans::try_into_sources)
+/// made in bulk from the a [stack trace](ErrorSpans) with [try into sources](ErrorSpans::try_into_sources)
 pub struct ErrorSource {
     pub(crate) range: LineRange,
     pub(crate) source: PathBuf,
@@ -62,7 +66,7 @@ pub struct ErrorSpans {
 }
 
 impl ErrorSpans {
-    /// # Get code from [error](ErrCtx)
+    /// # Get code from an [`error context`](ErrCtx)
     ///
     /// Read the source files with [File cacher](FileCacher) and make [Error source](ErrorSource)
     /// for each [Error context](ErrCtx) entry
@@ -83,6 +87,11 @@ impl ErrorSpans {
     }
 }
 
+/// # This should not be used
+///
+/// Implicitly convert a runtime error into [`ErrorSpans`].
+///
+/// The explicit [`into_error_spans`](RuntimeErrorCtx::into_error_spans) should be used
 impl From<RuntimeErrorCtx> for ErrorSpans {
     fn from(value: RuntimeErrorCtx) -> Self {
         Self {
@@ -97,6 +106,7 @@ impl From<RuntimeErrorCtx> for ErrorSpans {
 /// An [error](RuntimeErrorKind) with the faulty expression's [context](ErrCtx)
 /// and the [stack trace](RuntimeErrorCtx::get_call_stack)
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct RuntimeErrorCtx {
     pub(crate) ctx: ErrCtx,
     pub(crate) kind: Box<RuntimeErrorKind>,
@@ -119,6 +129,13 @@ impl RuntimeErrorCtx {
     #[must_use]
     pub fn get_call_stack(&self) -> &[ErrCtx] {
         &self.stack
+    }
+    #[must_use]
+    pub fn into_error_spans(self) -> ErrorSpans {
+        ErrorSpans {
+            head: self.ctx,
+            stack: self.stack,
+        }
     }
 }
 
@@ -207,6 +224,7 @@ pub enum StckError {
 ///
 /// This is usually wrapped by a [context](RuntimeErrorCtx) to display more information
 #[derive(thiserror::Error, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum RuntimeErrorKind {
     #[error("Not enough arguments to execute {name}, got {got:?} needs {needs:?}")]
     UserFnMissingArgs {
