@@ -346,6 +346,8 @@ impl TypeResolutionContext {
                     Err(v_err) => self.check_internal(tt_err, v_err),
                 }
             }
+            (TypeTester::Structure(sd), Value::Structure(si)) if Rc::ptr_eq(&si.def, sd) => Ok(()),
+            (TypeTester::Structure(..), Value::Structure(..)) => Err(()),
             (TypeTester::Option(_), Value::Option(None)) => Ok(()),
             (TypeTester::Option(tt), Value::Option(Some(v))) => self.check_internal(tt, v),
             (TypeTester::Closure(ttinput, ttoutput), Value::Closure(cl)) => {
