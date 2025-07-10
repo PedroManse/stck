@@ -105,6 +105,13 @@ pub struct ClosurePartialArgs {
     parent: OnceCell<HashMap<ArgName, FnArg>>,
 }
 
+#[cfg(test)]
+impl PartialEq for ClosurePartialArgs {
+    fn eq(&self, other: &Self) -> bool {
+        self.next == other.next && self.filled == other.filled
+    }
+}
+
 impl ClosurePartialArgs {
     pub fn get_unfilled_args(&self) -> &[FnArgDef] {
         &self.next
@@ -255,7 +262,9 @@ pub(crate) enum FnArgsInsCap {
 
 #[derive(Debug, Default)]
 pub struct Stack(Vec<Value>);
+
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct FnArg(pub Value);
 
 impl Stack {
@@ -415,6 +424,7 @@ pub struct UserStructDef {
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum UserStructMethod {
     New,
     Copy(usize),
@@ -731,6 +741,7 @@ pub enum KeywordKind {
     BubbleError,
     Ifs {
         branches: Vec<CondBranch>,
+        otherwhise: Option<Vec<Expr>>,
     },
     While {
         check: Vec<Expr>,
@@ -774,6 +785,7 @@ pub enum ExprCont {
     IncludedCode(Code),
 }
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
 pub enum ControlFlow {
     Continue,
     Break,

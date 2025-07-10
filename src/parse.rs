@@ -208,6 +208,20 @@ impl<'p> Context<'p> {
                     branches.push(CondBranch { check, code });
                     MakeIfs(branches)
                 }
+                (MakeIfsCode { branches, check }, cont) => {
+                    match cont {
+                        EndOfBlock => {}
+                        cont => self.unget(Token {
+                            cont,
+                            span: span.clone(),
+                        }),
+                    }
+                    push_expr!(E::Keyword(KeywordKind::Ifs {
+                        branches,
+                        otherwhise: Some(check)
+                    }));
+                    Nothing
+                }
                 (MakeIfs(branches), cont) => {
                     match cont {
                         EndOfBlock => {}
@@ -216,7 +230,10 @@ impl<'p> Context<'p> {
                             span: span.clone(),
                         }),
                     }
-                    push_expr!(E::Keyword(KeywordKind::Ifs { branches }));
+                    push_expr!(E::Keyword(KeywordKind::Ifs {
+                        branches,
+                        otherwhise: None
+                    }));
                     Nothing
                 }
 

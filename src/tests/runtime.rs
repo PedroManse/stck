@@ -1,6 +1,8 @@
+use std::path::PathBuf;
+
 use super::*;
 use crate::{
-    api,
+    ErrCtx, RuntimeErrorCtx, RuntimeErrorKind, api,
     cache::Isolated,
     error::Error,
     internals::{RuntimeContext, RustStckFn, Value},
@@ -163,6 +165,101 @@ fn structure_usage_explode() -> Result<(), Error> {
     assert_eq!(
         out,
         Some(Ok(Some(Box::new(Value::Str("developer".to_string())))))
+    );
+    Ok(())
+}
+
+#[test]
+fn ifs() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    let code = r#"
+(fn) [ a<T> ] [ <T> <T> ] dup { a a }
+
+(ifs) { dup 10 = } {
+    "It's ten"
+} { dup 12 = } {
+    "It's twelve"
+} { dup 14 = } {
+    "It's fourteen"
+} {
+    "IDK"
+}
+"#;
+    let code = api::get_tokens_str(code, "ifs code", &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+
+    let tests = [
+        (10, "It's ten"),
+        (12, "It's twelve"),
+        (14, "It's fourteen"),
+        (4, "IDK"),
+    ];
+    for (input, expected_output) in tests {
+        runtime.stack.push_this(input);
+        runtime.execute_entire_code(&code)?;
+        let out = runtime.stack.pop_this(Value::get_str);
+        assert_eq!(out, Some(Ok(expected_output.to_string())));
+    }
+    Ok(())
+}
+
+#[test]
+fn if_else() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    let code = r#"
+(ifs) { 10 10 = } {
+    "if code path"
+} {
+    "else code path"
+}
+"#;
+    let code = api::get_tokens_str(code, "if_else code", &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+    runtime.execute_entire_code(&code)?;
+    let out = runtime.stack.pop_this(Value::get_str);
+    assert_eq!(out, Some(Ok("if code path".to_string())));
+    Ok(())
+}
+
+#[test]
+fn runtime_stack() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    let code = "
+(fn) [ a b ] func-b { }
+(fn) [ v ] func-a { v func-b }
+
+10 func-a
+";
+    let source = PathBuf::from("error stack code");
+    let code = api::get_tokens_str(code, source.clone(), &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+    let error = runtime.execute_entire_code(&code);
+    assert_eq!(
+        Err(RuntimeErrorCtx {
+            ctx: ErrCtx::new(
+                &source,
+                &crate::Expr {
+                    span: crate::LineRange { start: 3, end: 3 },
+                    cont: crate::ExprCont::FnCall("func-b".to_string())
+                }
+            ),
+            kind: Box::new(RuntimeErrorKind::UserFnMissingArgs {
+                name: "func-b".to_string(),
+                got: vec![Value::Num(10)],
+                needs: vec!["a".to_string(), "b".to_string()]
+            }),
+            stack: vec![ErrCtx::new(
+                &source,
+                &crate::Expr {
+                    span: crate::LineRange { start: 5, end: 5 },
+                    cont: crate::ExprCont::FnCall("func-a".to_string())
+                }
+            )],
+        }),
+        error,
     );
     Ok(())
 }

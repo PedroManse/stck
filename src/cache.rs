@@ -1,7 +1,44 @@
+//! # Caching systems
+//!
+//! ## Why
+//! 1. To ease IO load
+//! 2. More host control
+//!
+//! 1: It is common for complex programs to import a file more than once. Not only that, but
+//! [`ErrCtx`] needs access to the source file's contents after an execution error, to show faulty
+//! lines.
+//!
+//! 2: They have also been created to allow for better control over the operating system from the
+//! host, since some caching systems need files to be alloed by the host instead of loaded at the
+//! user's every whim.
+//!
+//! # How
+//! The caching trait, [`FileCacher`], is the middleware for every IO access outside of runtime
+//! usage.
+//!
+//! ## Recommended usage
+//! |    Use Case    | Caching system  |
+//! |----------------|-----------------|
+//! | Untrusted code | [`Isolated`]    |
+//! | Trusted code   | [`CacheHelper`] |
+//!
+//! ## Details
+//! The simplest system is [`CacheHelper`], which caches all files and allow everything to be read.
+//!
+//! The most controlled system is [`Isolated`], which only allows previously-read files determined
+//! by the host to be accessed.
+//!
+//! In case of testing, any system's [`OverwriteCache`] might be used, since it allows overwriting
+//! entires in the cache's internal system.
+//!
+
 use crate::*;
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 use std::path::{Path, PathBuf};
 
+/// # A file caching system
+///
+/// Every non-runtime initiaded interaction with files must use a caching system to be executed.
 pub trait FileCacher {
     type FileRecord<'s>: AsRef<str>
     where
@@ -25,9 +62,18 @@ pub trait FileCacher {
     }
 }
 
-/// # Caching system for files
+pub trait OverwriteCache: FileCacher {
+    fn overwrite(&mut self, path: impl AsRef<Path>, content: String);
+}
+
+/// # Simple caching system for files
 ///
-/// Used with [Line range](LineRange) to read specific lines from files on [get span](ErrorHelper::get_span)
+/// The [`read_file`](struct.CacheHelper.html#method.read_file) method returns a [`CachedFile`]
+/// entry.
+///
+/// Every cache miss on `read_file` will read the entire file and save it into an internal hashmap
+///
+/// No deallocation of entries happens
 #[derive(Default)]
 pub struct CacheHelper {
     files: HashMap<PathBuf, String>,
@@ -40,11 +86,20 @@ impl CacheHelper {
     }
 }
 
+/// An entry for a file in a [`CacheHelper`]
+///
+/// Can be used with [`as_ref`](CachedFile::as_ref)
 pub struct CachedFile<'s>(OccupiedEntry<'s, PathBuf, String>);
 
 impl AsRef<str> for CachedFile<'_> {
     fn as_ref(&self) -> &str {
         self.0.get()
+    }
+}
+
+impl OverwriteCache for CacheHelper {
+    fn overwrite(&mut self, path: impl AsRef<Path>, content: String) {
+        self.files.insert(path.as_ref().to_path_buf(), content);
     }
 }
 
@@ -66,6 +121,11 @@ impl FileCacher for CacheHelper {
     }
 }
 
+/// # Disabled cache
+///
+/// For systems with limited memory, perhaps
+///
+/// Truly, this system only exists for completeness
 pub struct NoCache;
 impl FileCacher for NoCache {
     type FileRecord<'s> = String;
@@ -77,19 +137,35 @@ impl FileCacher for NoCache {
     }
 }
 
+/// # A mocked file system
+///
+/// A system's [`OverwriteCache`] should be used instead
+///
+/// ~Files can be mocked with [`mock_file`](MockFileCacher::mock_file).~
+/// ~If a file wasan't mocked, [`CacheHelper`] is used as a fallback~
 #[derive(Default)]
+#[deprecated]
 pub struct MockFileCacher(CacheHelper);
 
+#[allow(deprecated)]
 impl MockFileCacher {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
     pub fn mock_file(&mut self, path: PathBuf, content: String) {
-        self.0.files.insert(path, content);
+        self.0.overwrite(path, content);
     }
 }
 
+#[allow(deprecated)]
+impl OverwriteCache for MockFileCacher {
+    fn overwrite(&mut self, path: impl AsRef<Path>, content: String) {
+        self.mock_file(path.as_ref().to_path_buf(), content);
+    }
+}
+
+#[allow(deprecated)]
 impl FileCacher for MockFileCacher {
     type FileRecord<'s> = CachedFile<'s>;
     fn read_file(
@@ -100,6 +176,16 @@ impl FileCacher for MockFileCacher {
     }
 }
 
+/// # An isolated cache system
+///
+/// Only filed specified by [`add_file_cached`](Isolated::add_file_cached) or
+/// [`force_add_file`](Isolated::force_add_file) can be read by the user.
+///
+/// This is recomended in case of execution of untrusted code.
+///
+/// This system's native overwriting methods should be favored instead of the [`OverwriteCache`]
+/// implementation, since they consume the [`PathBuf`] they recieve, but the trait has to allocate
+/// and create one.
 #[derive(Default)]
 pub struct Isolated {
     allowed: HashMap<PathBuf, String>,
@@ -110,6 +196,7 @@ impl Isolated {
     pub fn new() -> Self {
         Self::default()
     }
+    /// Read a file and cache it, if it doesn't already exist
     pub fn add_file_cached(&mut self, path: PathBuf) -> Result<(), std::io::Error> {
         let entry = self.allowed.entry(path);
         if let Entry::Vacant(entry) = entry {
@@ -118,10 +205,19 @@ impl Isolated {
         }
         Ok(())
     }
+    /// Read a file and cache it
+    ///
+    /// May overwrite entry of file with same path.
     pub fn force_add_file(&mut self, path: PathBuf) -> Result<(), std::io::Error> {
         let cont = std::fs::read_to_string(&path)?;
         self.allowed.insert(path, cont);
         Ok(())
+    }
+}
+
+impl OverwriteCache for Isolated {
+    fn overwrite(&mut self, path: impl AsRef<Path>, content: String) {
+        self.allowed.insert(path.as_ref().to_path_buf(), content);
     }
 }
 

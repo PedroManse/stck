@@ -8,6 +8,9 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+/// # The error of highest order of the stck lib
+///
+/// Keeps either a [`Runtime error`](RuntimeErrorCtx) of [another type of error](StckError)
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -19,10 +22,11 @@ pub enum Error {
 /// # The context of a runtime error
 ///
 /// Error Context, informing the source file's path, the expression
-/// that caused the error and it's [span](LineRange)
+/// that caused the error and it's [`span`](LineRange)
 ///
 /// Useful to [get the source code of the error](ErrorSource)
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct ErrCtx {
     pub(crate) source: PathBuf,
     pub(crate) expr: Box<Expr>,
@@ -44,9 +48,17 @@ impl ErrCtx {
     }
 }
 
-/// # A single viewable source file
+/// # A viewable slice of a file
 ///
-/// made in bulk from the [stack trace](ErrorSpans) with [try into sources](ErrorSpans::try_into_sources)
+/// made in bulk from the a [stack trace](ErrorSpans) with [try into sources](ErrorSpans::try_into_sources)
+///
+/// Implemends Display by default to show:
+/// ```md
+/// ===[ {file}:{slice_start}:+{slice_size} ]===
+/// {file content}
+/// --------------------------------------------
+///
+/// ```
 pub struct ErrorSource {
     pub(crate) range: LineRange,
     pub(crate) source: PathBuf,
@@ -62,7 +74,7 @@ pub struct ErrorSpans {
 }
 
 impl ErrorSpans {
-    /// # Get code from [error](ErrCtx)
+    /// # Get code from an [`error context`](ErrCtx)
     ///
     /// Read the source files with [File cacher](FileCacher) and make [Error source](ErrorSource)
     /// for each [Error context](ErrCtx) entry
@@ -83,6 +95,11 @@ impl ErrorSpans {
     }
 }
 
+/// # This should not be used
+///
+/// Implicitly convert a runtime error into [`ErrorSpans`].
+///
+/// The explicit [`into_error_spans`](RuntimeErrorCtx::into_error_spans) should be used
 impl From<RuntimeErrorCtx> for ErrorSpans {
     fn from(value: RuntimeErrorCtx) -> Self {
         Self {
@@ -94,9 +111,13 @@ impl From<RuntimeErrorCtx> for ErrorSpans {
 
 /// # An error with context
 ///
-/// An [error](RuntimeErrorKind) with the faulty expression's [context](ErrCtx)
+/// A runtime [`error`](RuntimeErrorKind) with the faulty expression's [context](ErrCtx)
 /// and the [stack trace](RuntimeErrorCtx::get_call_stack)
+///
+/// This can be made into a stack trace of file slices containig the original expressions with
+/// [`RuntimeErrorCtx::into_error_spans`].
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct RuntimeErrorCtx {
     pub(crate) ctx: ErrCtx,
     pub(crate) kind: Box<RuntimeErrorKind>,
@@ -120,19 +141,20 @@ impl RuntimeErrorCtx {
     pub fn get_call_stack(&self) -> &[ErrCtx] {
         &self.stack
     }
+    #[must_use]
+    pub fn into_error_spans(self) -> ErrorSpans {
+        ErrorSpans {
+            head: self.ctx,
+            stack: self.stack,
+        }
+    }
 }
 
 impl std::error::Error for RuntimeErrorCtx {}
 
-/// # The lines before and the amount of lines of a span
+/// # A range of lines
 ///
-/// Made from a [line span](LineSpan) and the span of interest with [`LineSpan::line_range`]
-///
-/// Will be formated as "`before`" optionally with `:+amount` in the end if the span covers more
-/// than one line. The result `before:+amount` can be used direcly with [bat](https://github.com/sharkdp/bat)
-///
-/// The [`LineRange`] can be used with an [`FileCacher`] to select specific lines to read from
-/// files
+/// The [`LineRange`] can be used with [`FileCacher`]'s [`get_span`](FileCacher::get_span) to select specific lines to read from
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct LineRange {
     pub(crate) start: usize,
@@ -209,10 +231,11 @@ pub enum StckError {
 
 /// # A runtime error
 ///
-/// An error that can only be caught during a failure while trying to execute a stck script
+/// An error that can be caught during a failure while trying to execute a stck script
 ///
 /// This is usually wrapped by a [context](RuntimeErrorCtx) to display more information
 #[derive(thiserror::Error, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum RuntimeErrorKind {
     #[error("Not enough arguments to execute {name}, got {got:?} needs {needs:?}")]
     UserFnMissingArgs {
