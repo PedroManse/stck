@@ -1005,15 +1005,6 @@ impl Context {
                 self.stack.push_this(is_type);
             }
 
-            // seq debug
-            "debug$stack" => eprintln!("{:?}", self.stack),
-            "Debug$stack" => eprintln!("{}", self.stack),
-            "debug$vars" => eprintln!("{:?}", self.vars),
-            "debug$args" => eprintln!("{:?}", self.args),
-            "debug$fns" => eprintln!("{:?}", self.fns),
-            "debug$modules" => eprintln!("{:?}", self.enabled_modules),
-            "debug$generics" => eprintln!("{:?}", self.trc),
-
             _ => {
                 return Ok(None);
             }
