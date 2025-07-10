@@ -62,7 +62,7 @@ pub trait FileCacher {
     }
 }
 
-pub trait OverwriteCache {
+pub trait OverwriteCache: FileCacher {
     fn overwrite(&mut self, path: impl AsRef<Path>, content: String);
 }
 
@@ -141,8 +141,8 @@ impl FileCacher for NoCache {
 ///
 /// A system's [`OverwriteCache`] should be used instead
 ///
-/// ~Files can be mocked with [mock_file](MockFileCacher::mock_file).~
-/// ~If a file wasan't mocked, [CacheHelper] is used as a fallback~
+/// ~Files can be mocked with [`mock_file`](MockFileCacher::mock_file).~
+/// ~If a file wasan't mocked, [`CacheHelper`] is used as a fallback~
 #[derive(Default)]
 #[deprecated]
 pub struct MockFileCacher(CacheHelper);

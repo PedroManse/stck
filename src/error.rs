@@ -19,7 +19,7 @@ pub enum Error {
 /// # The context of a runtime error
 ///
 /// Error Context, informing the source file's path, the expression
-/// that caused the error and it's [span](LineRange)
+/// that caused the error and it's [`span`](LineRange)
 ///
 /// Useful to [get the source code of the error](ErrorSource)
 #[derive(Debug)]
@@ -126,7 +126,7 @@ impl std::error::Error for RuntimeErrorCtx {}
 
 /// # A range of lines
 ///
-/// The [`LineRange`] can be used with [`FileCacher`]'s [get_span](FileCacher::get_span) to select specific lines to read from
+/// The [`LineRange`] can be used with [`FileCacher`]'s [`get_span`](FileCacher::get_span) to select specific lines to read from
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct LineRange {
     pub(crate) start: usize,
