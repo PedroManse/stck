@@ -51,6 +51,14 @@ impl ErrCtx {
 /// # A viewable slice of a file
 ///
 /// made in bulk from the a [stack trace](ErrorSpans) with [try into sources](ErrorSpans::try_into_sources)
+///
+/// Implemends Display by default to show:
+/// ```
+/// ===[ {file}:{slice_start}:+{slice_size} ]===
+/// {file content}
+/// --------------------------------------------
+///
+/// ```
 pub struct ErrorSource {
     pub(crate) range: LineRange,
     pub(crate) source: PathBuf,
@@ -103,8 +111,11 @@ impl From<RuntimeErrorCtx> for ErrorSpans {
 
 /// # An error with context
 ///
-/// An [error](RuntimeErrorKind) with the faulty expression's [context](ErrCtx)
+/// A runtime [`error`](RuntimeErrorKind) with the faulty expression's [context](ErrCtx)
 /// and the [stack trace](RuntimeErrorCtx::get_call_stack)
+///
+/// This can be made into a stack trace of file slices containig the original expressions with
+/// [`RuntimeErrorCtx::into_error_spans`].
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct RuntimeErrorCtx {
@@ -220,7 +231,7 @@ pub enum StckError {
 
 /// # A runtime error
 ///
-/// An error that can only be caught during a failure while trying to execute a stck script
+/// An error that can be caught during a failure while trying to execute a stck script
 ///
 /// This is usually wrapped by a [context](RuntimeErrorCtx) to display more information
 #[derive(thiserror::Error, Debug)]
