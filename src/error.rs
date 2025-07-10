@@ -223,8 +223,6 @@ pub enum StckError {
     UnknownType(String),
     #[error("Can't parse TRC `{0}`, missing name")]
     TRCMissingName(String),
-    #[error("Tried making a builtin module without a # prefix")]
-    BuiltinModuleWithoutBang(String),
     #[error("Hosts can't make modules with the # prefix (sign of builtin module)")]
     UserModuleWithBang(String),
 }

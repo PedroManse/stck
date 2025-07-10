@@ -9,6 +9,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
+use self::module::{IntoModules, Module};
+
 #[derive(thiserror::Error, Debug)]
 enum RuntimeError {
     #[error(transparent)]
@@ -74,7 +76,21 @@ pub struct Context {
 impl Context {
     #[must_use]
     pub fn new() -> Self {
+        let mut ctx = Self::default();
+        ctx.register_module(module::builtin_modules());
+        ctx
+    }
+
+    #[must_use]
+    pub fn new_raw() -> Self {
         Self::default()
+    }
+
+    pub fn register_module(&mut self, module_group: impl IntoModules) {
+        for Module { funcs, name } in module_group.into_modules() {
+            self.rust_fns.extend(funcs);
+            self.enabled_modules.insert(name);
+        }
     }
 
     pub fn add_module(&mut self, module: module::Module) {
@@ -948,33 +964,6 @@ impl Context {
                 self.stack.push_this(v);
             }
 
-            // seq map
-            "map$new" => {
-                self.stack.push_this(HashMap::new());
-            }
-            "map$insert-kv" => {
-                let value = stack_pop!(
-                    (self.stack) -> * as "value" for fn_name
-                )?;
-                let key = stack_pop!(
-                    (self.stack) -> str as "key" for fn_name
-                )?;
-                let mut map = stack_pop!(
-                    (self.stack) -> map as "map" for fn_name
-                )?;
-                map.insert(key, value);
-                self.stack.push_this(map);
-            }
-            "map$get" => {
-                let key = stack_pop!(
-                    (self.stack) -> str as "key" for fn_name
-                )?;
-                let got = stack_pop!((self.stack) -> &map as "map" for fn_name)?
-                    .get(&key)
-                    .cloned();
-                self.stack.push_this(got);
-            }
-
             // seq type
             "type$is-str" => {
                 let is_type = stack_pop!((self.stack) -> str as "value" for fn_name).is_ok();
@@ -1004,15 +993,6 @@ impl Context {
                 let is_type = stack_pop!((self.stack) -> option as "value" for fn_name).is_ok();
                 self.stack.push_this(is_type);
             }
-
-            // seq debug
-            "debug$stack" => eprintln!("{:?}", self.stack),
-            "Debug$stack" => eprintln!("{}", self.stack),
-            "debug$vars" => eprintln!("{:?}", self.vars),
-            "debug$args" => eprintln!("{:?}", self.args),
-            "debug$fns" => eprintln!("{:?}", self.fns),
-            "debug$modules" => eprintln!("{:?}", self.enabled_modules),
-            "debug$generics" => eprintln!("{:?}", self.trc),
 
             _ => {
                 return Ok(None);
