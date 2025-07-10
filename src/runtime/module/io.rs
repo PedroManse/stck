@@ -5,7 +5,7 @@ use crate::{
 use std::{io::Write, path::Path};
 use super::register;
 
-pub fn io() -> Module {
+pub fn make() -> Module {
     let mut io_mod = Module::new_protected("io");
 
     register!(io_mod, read_file as |ctx| {
@@ -62,5 +62,5 @@ pub fn io() -> Module {
 
 #[deprecated]
 pub fn io_module() -> Result<Module, StckError> {
-    Ok(io())
+    Ok(make())
 }

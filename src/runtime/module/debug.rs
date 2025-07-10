@@ -24,7 +24,7 @@ fn debug_generics(ctx: &mut RuntimeContext, _: &Path) {
     println!("{:?}", ctx.trc);
 }
 
-pub fn debug() -> Module {
+pub fn make() -> Module {
     let mut debug_mod = Module::new_protected("debug");
     debug_mod.add_fn("debug$stack", Hook::Raw(debug_stack));
     debug_mod.add_fn("Debug$stack", Hook::Raw(debug_stack_pretty));

@@ -1,13 +1,5 @@
-mod io;
-mod debug;
-pub mod oficial {
-    pub use super::io::*;
-    pub use super::debug::*;
-}
-
 use crate::{FnName, StckError};
 use std::collections::HashMap;
-
 use super::Hook;
 
 macro_rules! register {
@@ -21,7 +13,6 @@ macro_rules! register {
     };
 }
 pub(crate) use register;
-
 
 #[derive(Clone)]
 pub struct Module {
@@ -42,9 +33,50 @@ impl Module {
     }
     fn new_protected(name: &'static str) -> Module {
         let name = format!("#{name}");
-        Module { name, funcs: HashMap::new() }
+        Module {
+            name,
+            funcs: HashMap::new(),
+        }
     }
     pub fn add_fn(&mut self, name: impl Into<String>, fnc: Hook) -> Option<Hook> {
         self.funcs.insert(name.into(), fnc)
     }
 }
+
+pub trait IntoModules {
+    fn into_modules(self) -> impl Iterator<Item = Module>;
+}
+
+impl IntoModules for Module {
+    fn into_modules(self) -> impl Iterator<Item = Module> {
+        std::iter::once(self)
+    }
+}
+
+impl<II> IntoModules for II
+where
+    II: IntoIterator<Item = Module>,
+{
+    fn into_modules(self) -> impl Iterator<Item = Module> {
+        self.into_iter()
+    }
+}
+
+pub mod debug;
+pub mod io;
+
+#[deprecated]
+pub mod oficial {
+    pub use super::debug::make as debug;
+    pub use super::io::make as io;
+    #[allow(deprecated)]
+    pub use super::io::io_module;
+}
+
+pub fn builtin_modules() -> impl IntoModules {
+    [
+        debug::make(),
+        io::make(),
+    ]
+}
+
