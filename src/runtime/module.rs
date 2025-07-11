@@ -28,6 +28,7 @@ pub struct Module {
 
 impl Module {
     /// Create an empty module
+    #[must_use]
     pub fn empty(name: String) -> Module {
         Module {
             name,
@@ -81,6 +82,6 @@ pub mod oficial {
 }
 
 #[must_use]
-pub(crate) fn get_builtin_modules() -> impl IntoIterator<Item=Module> {
+pub(crate) fn get_builtin_modules() -> impl IntoIterator<Item = Module> {
     [debug::make(), io::make(), map::make()]
 }
