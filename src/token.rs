@@ -248,10 +248,18 @@ impl Context {
                                 .map(str::trim)
                                 .map(String::from)
                                 .map(RawKeyword::Require);
+                            // In case of old (require) invocations regarding protected
+                            // modules, simply remove the # prefix
+                            let require_old_protected = otherwise
+                                .strip_prefix("require #")
+                                .map(str::trim)
+                                .map(String::from)
+                                .map(RawKeyword::Require);
                             include
                                 .or(pragma)
                                 .or(fn_into_closure)
                                 .or(trc)
+                                .or(require_old_protected)
                                 .or(require)
                                 .ok_or(StckError::UnknownKeyword(otherwise.to_string()))?
                         }

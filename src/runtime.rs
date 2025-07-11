@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
-use self::module::{IntoModules, Module};
+use self::module::Module;
 
 #[derive(thiserror::Error, Debug)]
 enum RuntimeError {
@@ -77,7 +77,7 @@ impl Context {
     #[must_use]
     pub fn new() -> Self {
         let mut ctx = Self::default();
-        ctx.register_module(module::builtin_modules());
+        ctx.register_modules(module::get_builtin_modules());
         ctx
     }
 
@@ -86,13 +86,23 @@ impl Context {
         Self::default()
     }
 
-    pub fn register_module(&mut self, module_group: impl IntoModules) {
+    pub fn register_modules(&mut self, module_group: impl IntoIterator<Item = Module>) {
+        for Module { funcs, name } in module_group {
+            self.rust_fns.extend(funcs);
+            self.enabled_modules.insert(name);
+        }
+    }
+
+    #[allow(deprecated)]
+    #[deprecated]
+    pub fn register_module(&mut self, module_group: impl module::IntoModules) {
         for Module { funcs, name } in module_group.into_modules() {
             self.rust_fns.extend(funcs);
             self.enabled_modules.insert(name);
         }
     }
 
+    #[deprecated]
     pub fn add_module(&mut self, module: module::Module) {
         self.rust_fns.extend(module.funcs);
         self.enabled_modules.insert(module.name);

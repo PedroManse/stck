@@ -25,7 +25,7 @@ fn debug_generics(ctx: &mut RuntimeContext, _: &Path) {
 }
 
 pub fn make() -> Module {
-    let mut debug_mod = Module::new_protected("debug");
+    let mut debug_mod = Module::empty("debug".to_string());
     debug_mod.add_fn("debug$stack", Hook::Raw(debug_stack));
     debug_mod.add_fn("Debug$stack", Hook::Raw(debug_stack_pretty));
     debug_mod.add_fn("debug$vars", Hook::Raw(debug_vars));
