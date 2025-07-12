@@ -37,7 +37,7 @@ fn map_get(ctx: &mut RuntimeContext, _: &Path) -> Result<(), RuntimeErrorKind> {
 }
 
 pub fn make() -> Module {
-    let mut map_mod = Module::new_protected("map");
+    let mut map_mod = Module::empty("map".to_string());
     map_mod.add_fn("map$new", Hook::Raw(map_new));
     map_mod.add_fn("map$insert", Hook::WithError(map_insert));
     map_mod.add_fn("map$insert-kv", Hook::WithError(map_insert));
