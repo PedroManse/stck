@@ -1,3 +1,15 @@
+//! # Map module
+//!
+//! Registered as `map`. It allows the user to interact with Hashmaps[^hashmapkey]
+//!
+//! ## Functions
+//! * `map$new` `[][ <map> ] `
+//! * `map$insert` `[ m<map> k<str> v<?> ] [ <map> ]`
+//! * `map$insert-kv`, for compatibility reasons
+//! * `map$get` `[ m<map> k<str> ][ m<map> <option<?>> ]`
+//!
+//! [^hashmapkey]: In stck, hashmap's key can only be strings
+
 use crate::runtime::{sget, stack_pop};
 use crate::{
     RuntimeContext, RuntimeErrorKind, Value,
