@@ -187,43 +187,65 @@ impl LineRange {
 /// A failure that doesn't occour during the runtime of the stck script, but at some other time
 #[derive(thiserror::Error, Debug)]
 pub enum StckError {
+    /// Deprecated failure of reading file
     #[deprecated]
     #[error("Can't read file {0:?}")]
     CantReadFile(PathBuf),
+    /// IO Failure
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    /// Fail to parse string as integer
     #[error(transparent)]
     ParseInt(#[from] std::num::ParseIntError),
+    /// Fail to parse string as float
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
+    /// Couldn't find (pragma end if) on (pragma if) section
     #[error("No pragma section to (end if), on span {0}")]
     NoSectionToClose(LineRange),
+    /// Can't use (pragma else) on current section (already execution else section)
     #[error("Can't start pragma (else) section on {1:?} (span {0:?})")]
     CantElseCurrentSection(LineRange, Option<crate::preproc::ProcCommand>),
+    /// Invalid pragma command
     #[error("Invalid pragma command: {0}")]
     InvalidPragma(String),
+    /// End of file while making token with definitive ending not yet found
     #[error("Unexpected end of file while building token {0:?}")]
     UnexpectedEOF(token::State),
+    /// Invalid character with specific Tokenizer state
     #[error("Tokenizer: No impl for {0:?} with {1:?}")]
     CantTokenizerChar(token::State, char),
+    /// Invalid token to parse with specific Parser state
     #[error(
         "Parser in file {path}: State ({0:?}): {state} doesn't accept token: {1:?}",
         path=.2.display().to_string().green(),
         state=.0.to_string().yellow()
     )]
     CantParseToken(parse::State, Box<TokenCont>, PathBuf),
+    /// An unknown keyword tried to be tokenized
     #[error("Unknown keyword: {0}")]
     UnknownKeyword(String),
+    /// Will be deprecated
     #[error("Missing char")]
     MissingChar,
-    #[error("Can't make closure with zero arguments, it's code spans these bytes: {span}")]
+    /// Can't create a closure with zero arguments
+    #[error("Can't make closure with zero arguments, it's code spans these lines: {span}")]
     CantInstanceClosureZeroArgs { span: LineRange },
+    /// Functions only accept an argument list or a '*' as their arguments
     #[error("Parser in file {path}: Can only user param list or '*' as function arguments, not {0}", path=.1.display())]
     WrongParamList(String, PathBuf),
+    /// Type is unknown
+    ///
+    /// Generic types must start with capital letters
     #[error("Type `{0}` doesn't exist")]
     UnknownType(String),
+    /// A Defined Generic must have a name
     #[error("Can't parse TRC `{0}`, missing name")]
     TRCMissingName(String),
+    /// Deprecated User module starts with bang
+    ///
+    /// Bang `#` prefixes are now allowed, but not used by builtin module
+    #[deprecated]
     #[error("Hosts can't make modules with the # prefix (sign of builtin module)")]
     UserModuleWithBang(String),
 }
