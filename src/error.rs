@@ -187,8 +187,6 @@ impl LineRange {
 /// A failure that doesn't occour during the runtime of the stck script, but at some other time
 #[derive(thiserror::Error, Debug)]
 pub enum StckError {
-    #[error("Can't read file {0:?}")]
-    CantReadFile(PathBuf),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

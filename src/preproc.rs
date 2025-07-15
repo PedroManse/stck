@@ -55,10 +55,7 @@ impl<'p> Context<'p> {
             match cont {
                 TokenCont::Keyword(RawKeyword::Include { path }) => {
                     let include_path = self.dir.join(path);
-                    let metadata = include_path
-                        .metadata()
-                        .ok()
-                        .ok_or(StckError::CantReadFile(include_path.clone()))?;
+                    let metadata = include_path.metadata().map_err(StckError::from)?;
                     let included_tokens = if metadata.is_dir() {
                         api::get_tokens_with_procvars(
                             include_path.join("stck.stck"),

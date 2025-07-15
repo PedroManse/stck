@@ -93,7 +93,7 @@ pub fn execute_raw_code(code: &Code) -> SResult<runtime::Context> {
 fn get_raw_tokens(file_path: &Path, file_cache: &mut impl FileCacher) -> SResult<TokenBlock> {
     let cont = file_cache
         .read_file(file_path)
-        .map_err(|_| StckError::CantReadFile(file_path.to_path_buf()))?;
+        .map_err(error::StckError::from)?;
     token::Context::new(cont.as_ref())
         .tokenize(file_path.to_path_buf())
         .map_err(error::Error::from)
