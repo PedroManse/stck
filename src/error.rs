@@ -182,6 +182,15 @@ impl LineRange {
     }
 }
 
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum UnauthorizedAction {
+    ExecuteClosure,
+    DeclareFunction,
+    WhileLoop,
+    Include,
+}
+
 /// # An error from `stck`
 ///
 /// A failure that doesn't occour during the runtime of the stck script, but at some other time
@@ -353,4 +362,6 @@ pub enum RuntimeErrorKind {
         UserStructMethod,
         Rc<UserStructDef>,
     ),
+    #[error("Tried to execute dissalowed action: {0}")]
+    DisallowedAction(UnauthorizedAction),
 }
