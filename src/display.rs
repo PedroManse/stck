@@ -306,7 +306,7 @@ impl Display for Stack {
     }
 }
 
-impl Display for runtime::UnauthorizedAction {
+impl Display for error::UnauthorizedAction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let x = match self {
             Self::Include => "Include",

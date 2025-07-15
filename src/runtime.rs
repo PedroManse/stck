@@ -20,15 +20,6 @@ struct ExecAllowOptions {
     while_loop: bool,
 }
 
-#[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
-pub enum UnauthorizedAction {
-    ExecuteClosure,
-    DeclareFunction,
-    WhileLoop,
-    Include,
-}
-
 impl Default for ExecAllowOptions {
     fn default() -> Self {
         Self {
@@ -289,7 +280,7 @@ impl Context {
             ExprCont::Immediate(Value::Closure(cl)) => {
                 if !self.options.closure {
                     return Err(RuntimeErrorKind::DisallowedAction(
-                        UnauthorizedAction::ExecuteClosure,
+                        error::UnauthorizedAction::ExecuteClosure,
                     )
                     .into());
                 }
@@ -309,9 +300,10 @@ impl Context {
                 if self.options.include {
                     self.execute_code(exprs, source)?;
                 } else {
-                    return Err(
-                        RuntimeErrorKind::DisallowedAction(UnauthorizedAction::Include).into(),
-                    );
+                    return Err(RuntimeErrorKind::DisallowedAction(
+                        error::UnauthorizedAction::Include,
+                    )
+                    .into());
                 }
             }
         }
@@ -404,9 +396,10 @@ impl Context {
             }
             KeywordKind::While { check, code } => {
                 if !self.options.while_loop {
-                    return Err(
-                        RuntimeErrorKind::DisallowedAction(UnauthorizedAction::WhileLoop).into(),
-                    );
+                    return Err(RuntimeErrorKind::DisallowedAction(
+                        error::UnauthorizedAction::WhileLoop,
+                    )
+                    .into());
                 }
                 while self.execute_check(check, source)? {
                     match self.execute_code(code, source)? {
@@ -426,7 +419,7 @@ impl Context {
             } => {
                 if !self.options.func {
                     return Err(RuntimeErrorKind::DisallowedAction(
-                        UnauthorizedAction::DeclareFunction,
+                        error::UnauthorizedAction::DeclareFunction,
                     )
                     .into());
                 }

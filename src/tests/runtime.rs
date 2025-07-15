@@ -313,7 +313,9 @@ fn exec_options() -> Result<(), Error> {
             }),
             lines: crate::error::LineRange { start: 2, end: 4 },
         },
-        kind: Box::new(crate::error::RuntimeErrorKind::DisallowedAction(crate::runtime::UnauthorizedAction::WhileLoop)),
+        kind: Box::new(crate::error::RuntimeErrorKind::DisallowedAction(
+            crate::error::UnauthorizedAction::WhileLoop,
+        )),
         stack: vec![],
     };
     assert_eq!(e, Err(ex_e));
