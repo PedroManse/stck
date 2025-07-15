@@ -117,6 +117,29 @@ impl Context {
         Self::default()
     }
 
+    pub fn set_all_options(&mut self, opt: bool) {
+        self.options.include = opt;
+        self.options.closure = opt;
+        self.options.func = opt;
+        self.options.while_loop = opt;
+    }
+    pub fn set_option_include(&mut self, opt: bool) -> &mut Self {
+        self.options.include = opt;
+        self
+    }
+    pub fn set_option_closure(&mut self, opt: bool) -> &mut Self {
+        self.options.closure = opt;
+        self
+    }
+    pub fn set_option_func(&mut self, opt: bool) -> &mut Self {
+        self.options.func = opt;
+        self
+    }
+    pub fn set_option_while_loop(&mut self, opt: bool) -> &mut Self {
+        self.options.while_loop = opt;
+        self
+    }
+
     /// Gets all enabled modules
     ///
     /// All modules registered by [`register_modules`](Self::register_modules)
