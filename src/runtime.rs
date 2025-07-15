@@ -12,25 +12,27 @@ use std::rc::Rc;
 use self::module::Module;
 
 #[derive(Clone, Copy, Debug)]
+#[allow(clippy::struct_excessive_bools)]
 struct ExecAllowOptions {
-    print: bool,
+    include: bool,
     closure: bool,
     func: bool,
     while_loop: bool,
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum UnauthorizedAction {
-    Print,
     ExecuteClosure,
     DeclareFunction,
     WhileLoop,
+    Include,
 }
 
 impl Default for ExecAllowOptions {
     fn default() -> Self {
         Self {
-            print: true,
+            include: true,
             closure: true,
             func: true,
             while_loop: true,
@@ -171,11 +173,7 @@ impl Context {
         self.stack
     }
 
-    fn frame_fn(
-        ctx: &Context,
-        vars: HashMap<String, Value>,
-        args_ins: FnArgsInsCap,
-    ) -> Self {
+    fn frame_fn(ctx: &Context, vars: HashMap<String, Value>, args_ins: FnArgsInsCap) -> Self {
         let (stack, args) = match args_ins {
             FnArgsInsCap::AllStack(xs) => (Stack::new_with(xs), None),
             FnArgsInsCap::Args(args) => (Stack::new(), Some(args)),
@@ -266,6 +264,12 @@ impl Context {
                 return self.execute_kw(kw, source);
             }
             ExprCont::Immediate(Value::Closure(cl)) => {
+                if !self.options.closure {
+                    return Err(RuntimeErrorKind::DisallowedAction(
+                        UnauthorizedAction::ExecuteClosure,
+                    )
+                    .into());
+                }
                 let cl = cl.clone();
                 if let Some(args) = &self.args {
                     cl.set_parent_args(args.clone()).map_err(|old| {
@@ -279,7 +283,13 @@ impl Context {
             }
             ExprCont::Immediate(v) => self.stack.push(v.clone()),
             ExprCont::IncludedCode(Code { source, exprs }) => {
-                self.execute_code(exprs, source)?;
+                if self.options.include {
+                    self.execute_code(exprs, source)?;
+                } else {
+                    return Err(
+                        RuntimeErrorKind::DisallowedAction(UnauthorizedAction::Include).into(),
+                    );
+                }
             }
         }
         Ok(ControlFlow::Continue)
@@ -370,6 +380,11 @@ impl Context {
                 ControlFlow::Continue
             }
             KeywordKind::While { check, code } => {
+                if !self.options.while_loop {
+                    return Err(
+                        RuntimeErrorKind::DisallowedAction(UnauthorizedAction::WhileLoop).into(),
+                    );
+                }
                 while self.execute_check(check, source)? {
                     match self.execute_code(code, source)? {
                         ControlFlow::Break => break,
@@ -386,6 +401,12 @@ impl Context {
                 args,
                 out_args,
             } => {
+                if !self.options.func {
+                    return Err(RuntimeErrorKind::DisallowedAction(
+                        UnauthorizedAction::DeclareFunction,
+                    )
+                    .into());
+                }
                 self.fns.insert(
                     name.clone(),
                     FnDef::new(
@@ -536,11 +557,7 @@ impl Context {
         closure: FullClosure,
         source: &Path,
     ) -> MixedResult<Vec<Value>> {
-        let mut cl_ctx = Context::frame_closure(
-            &self,
-            self.vars.clone(),
-            closure.request_args,
-        );
+        let mut cl_ctx = Context::frame_closure(self, self.vars.clone(), closure.request_args);
         cl_ctx.execute_code(&closure.code, source)?;
         let output = cl_ctx.take_stack().into_vec();
         // TODO: use TRC instance from closure
@@ -601,11 +618,7 @@ impl Context {
             }
             FnArgs::AllStack => FnArgsInsCap::AllStack(self.stack.take()),
         };
-        let mut fn_ctx = Context::frame_fn(
-            self,
-            vars,
-            args,
-        );
+        let mut fn_ctx = Context::frame_fn(self, vars, args);
 
         // handle (return) kw and RT errors inside functions
         if let Err(e) = fn_ctx.execute_code(&user_fn.code, &user_fn.source) {

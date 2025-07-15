@@ -309,7 +309,7 @@ impl Display for Stack {
 impl Display for runtime::UnauthorizedAction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let x = match self {
-            Self::Print => "Print",
+            Self::Include => "Include",
             Self::WhileLoop => "While loop",
             Self::ExecuteClosure => "Execute closure",
             Self::DeclareFunction => "Declare function",
