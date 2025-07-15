@@ -61,12 +61,12 @@ type MixedResult<T> = std::result::Result<T, RuntimeError>;
 
 #[derive(Clone, Debug)]
 pub enum Hook {
-    Raw(fn(&mut runtime::Context, &Path)),
-    WithError(fn(&mut runtime::Context, &Path) -> Result<(), RuntimeErrorKind>),
+    Raw(fn(&mut Context, &Path)),
+    WithError(fn(&mut Context, &Path) -> Result<(), RuntimeErrorKind>),
 }
 
 impl Hook {
-    pub fn call(&self, ctx: &mut runtime::Context, source: &Path) -> Result<(), RuntimeErrorKind> {
+    pub fn call(&self, ctx: &mut Context, source: &Path) -> Result<(), RuntimeErrorKind> {
         match self {
             Hook::Raw(c) => {
                 c(ctx, source);
@@ -77,18 +77,19 @@ impl Hook {
     }
 }
 
-impl From<fn(&mut runtime::Context, &Path)> for Hook {
-    fn from(value: fn(&mut runtime::Context, &Path)) -> Self {
+impl From<fn(&mut Context, &Path)> for Hook {
+    fn from(value: fn(&mut Context, &Path)) -> Self {
         Hook::Raw(value)
     }
 }
-impl From<fn(&mut runtime::Context, &Path) -> Result<(), RuntimeErrorKind>> for Hook {
-    fn from(value: fn(&mut runtime::Context, &Path) -> Result<(), RuntimeErrorKind>) -> Self {
+impl From<fn(&mut Context, &Path) -> Result<(), RuntimeErrorKind>> for Hook {
+    fn from(value: fn(&mut Context, &Path) -> Result<(), RuntimeErrorKind>) -> Self {
         Hook::WithError(value)
     }
 }
 
 #[derive(Default, Debug)]
+#[doc(alias = "Runtime")]
 pub struct Context {
     options: ExecAllowOptions,
     vars: HashMap<String, Value>,
@@ -114,6 +115,21 @@ impl Context {
         Self::default()
     }
 
+    /// Gets all enabled modules
+    ///
+    /// All modules registered by [`register_modules`](Self::register_modules)
+    #[must_use]
+    pub fn get_enabled_modules(&self) -> &HashSet<String> {
+        &self.enabled_modules
+    }
+
+    /// Register modules[^many-or-one]
+    ///
+    /// Make the modules' functions avaliable to the user and register their names as enabled
+    ///
+    /// The list of enabled modules can be gotten form [`get_enabled_modules`](Self::get_enabled_modules)
+    ///
+    /// [^many-or-one]: A single module implements [`IntoIterator`] for convenience
     pub fn register_modules(&mut self, module_group: impl IntoIterator<Item = Module>) {
         for Module { funcs, name } in module_group {
             self.rust_fns.extend(funcs);

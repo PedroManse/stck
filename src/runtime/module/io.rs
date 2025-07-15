@@ -1,3 +1,11 @@
+//! # IO Module
+//!
+//! Registered as `io`. It allows the user to read and write to files
+//!
+//! ## Functions
+//! * `io$read-file` `[ <str> ][ <result<str><str>> ]`
+//! * `io$write-file` `[ content<str> path<str> ][ <result<num><str>> ]`
+
 use crate::{
     RuntimeContext, RuntimeErrorKind, StckError, Value,
     runtime::{Hook, module::Module, sget, stack_pop},

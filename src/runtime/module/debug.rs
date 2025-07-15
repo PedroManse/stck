@@ -1,3 +1,17 @@
+//! # Debug module
+//!
+//! Registered as `debug`. It allows the user to print information about the execution context to
+//! stdout.
+//!
+//! ## Functions
+//! * `debug$stack`
+//! * `Debug$stack` (pretty print)
+//! * `debug$vars`
+//! * `debug$args`
+//! * `debug$fns`
+//! * `debug$modules`
+//! * `debug$generics`
+
 use super::*;
 use crate::RuntimeContext;
 use std::path::Path;
