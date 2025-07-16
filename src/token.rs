@@ -381,27 +381,19 @@ impl Context {
                 }
             }
         }
-        if self.at_eof() {
-            match state {
-                Nothing | OnComment => {}
-                MakeIdent(s) => {
-                    self.push_token(&mut out, Ident(s));
-                }
-                MakeNumber(buf) => {
-                    let num = buf.parse()?;
-                    self.push_token(&mut out, Number(num));
-                }
-                s => return Err(StckError::UnexpectedEOF(s)),
+        match state {
+            Nothing | OnComment => {}
+            MakeIdent(s) => {
+                self.push_token(&mut out, Ident(s));
             }
-            self.push_token(&mut out, EndOfBlock);
-            Ok(out)
-        } else {
-            Err(crate::StckError::MissingChar)
+            MakeNumber(buf) => {
+                let num = buf.parse()?;
+                self.push_token(&mut out, Number(num));
+            }
+            s => return Err(StckError::UnexpectedEOF(s)),
         }
-    }
-
-    fn at_eof(&self) -> bool {
-        self.point == self.chars.len()
+        self.push_token(&mut out, EndOfBlock);
+        Ok(out)
     }
 
     fn next(&mut self) -> Option<&char> {
