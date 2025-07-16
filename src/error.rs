@@ -195,6 +195,7 @@ pub enum UnauthorizedAction {
 ///
 /// A failure that doesn't occour during the runtime of the stck script, but at some other time
 #[derive(thiserror::Error, Debug)]
+#[cfg_attr(not(feature = "exhaustive-errors"), non_exhaustive)]
 pub enum StckError {
     #[error("Can't read file {0:?}")]
     CantReadFile(PathBuf),
@@ -243,6 +244,7 @@ pub enum StckError {
 /// This is usually wrapped by a [context](RuntimeErrorCtx) to display more information
 #[derive(thiserror::Error, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
+#[cfg_attr(not(feature = "exhaustive-errors"), non_exhaustive)]
 pub enum RuntimeErrorKind {
     #[error("Not enough arguments to execute {name}, got {got:?} needs {needs:?}")]
     UserFnMissingArgs {

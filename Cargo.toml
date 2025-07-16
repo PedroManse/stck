@@ -18,3 +18,7 @@ thiserror = "2.0.12"
 name = "stck"
 path = "src/lib.rs"
 
+[features]
+default = []
+exhaustive-errors = []
+
