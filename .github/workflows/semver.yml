@@ -12,7 +12,7 @@ jobs:
     - name: Check SemVer
       uses: obi1kenobi/cargo-semver-checks-action@v2
   test_publish:
-    if: contains( "no-publish", github.event.pull_request.labels ) == false
+    if: ${{ contains( '#nopub', github.event.pull_request.body ) == false }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

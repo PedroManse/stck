@@ -8,7 +8,7 @@ on:
 
 jobs:
   if_merged:
-    if: github.event.pull_request.merged && ( contains( "no-publish", github.event.pull_request.labels ) == false )
+    if: ${{ github.event.pull_request.merged && ( contains( '#nopub', github.event.pull_request.body ) == false ) }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
