@@ -2,13 +2,13 @@ name: Rust
 
 on:
   pull_request:
-    branches: [ "release", "dev" ]
+    branches: [ "dev" ]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  RustTests:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

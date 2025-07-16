@@ -5,7 +5,7 @@ use crate::{
     ErrCtx, RuntimeErrorCtx, RuntimeErrorKind, api,
     cache::Isolated,
     error::Error,
-    internals::{RuntimeContext, RustStckFn, Value},
+    internals::{self, RuntimeContext, RustStckFn, Value},
 };
 
 fn execute_string(cont: &str, test_name: &str) -> Result<RuntimeContext, Error> {
@@ -261,5 +261,63 @@ fn runtime_stack() -> Result<(), Error> {
         }),
         error,
     );
+    Ok(())
+}
+
+#[test]
+fn exec_options() -> Result<(), Error> {
+    let mut file_cacher = Isolated::new();
+    let mut runtime = RuntimeContext::new();
+    runtime
+        .set_option_include(true)
+        .set_option_while_loop(false);
+    let code = r#"
+(while) { 1 1 = } {
+    "yes" print
+}
+"#;
+    let code = api::get_tokens_str(code, "while rt_option", &mut file_cacher)?;
+    let code = api::parse_raw_tokens(code)?;
+    let e = runtime.execute_entire_code(&code);
+    let ex_e = RuntimeErrorCtx {
+        ctx: ErrCtx {
+            source: PathBuf::from("while rt_option"),
+            expr: Box::new(internals::Expr {
+                span: crate::error::LineRange { start: 2, end: 4 },
+                cont: internals::ExprCont::Keyword(internals::KeywordKind::While {
+                    check: vec![
+                        internals::Expr {
+                            span: crate::error::LineRange { start: 2, end: 2 },
+                            cont: internals::ExprCont::Immediate(Value::Num(1)),
+                        },
+                        internals::Expr {
+                            span: crate::error::LineRange { start: 2, end: 2 },
+                            cont: internals::ExprCont::Immediate(Value::Num(1)),
+                        },
+                        internals::Expr {
+                            span: crate::error::LineRange { start: 2, end: 2 },
+                            cont: internals::ExprCont::FnCall("=".to_string()),
+                        },
+                    ],
+                    code: vec![
+                        internals::Expr {
+                            span: crate::error::LineRange { start: 3, end: 3 },
+                            cont: internals::ExprCont::Immediate(Value::Str("yes".to_string())),
+                        },
+                        internals::Expr {
+                            span: crate::error::LineRange { start: 3, end: 3 },
+                            cont: internals::ExprCont::FnCall("print".to_string()),
+                        },
+                    ],
+                }),
+            }),
+            lines: crate::error::LineRange { start: 2, end: 4 },
+        },
+        kind: Box::new(crate::error::RuntimeErrorKind::DisallowedAction(
+            crate::error::UnauthorizedAction::WhileLoop,
+        )),
+        stack: vec![],
+    };
+    assert_eq!(e, Err(ex_e));
     Ok(())
 }

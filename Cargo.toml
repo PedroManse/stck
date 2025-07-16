@@ -1,6 +1,6 @@
 [package]
 name = "stck"
-version = "1.7.1"
+version = "2.2.0"
 edition = "2024"
 authors = ["Manse <pedromanse@duck.com>"]
 license = "GPL-3.0"
@@ -17,4 +17,8 @@ thiserror = "2.0.12"
 [lib]
 name = "stck"
 path = "src/lib.rs"
+
+[features]
+default = []
+exhaustive-errors = []
 

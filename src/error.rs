@@ -182,10 +182,20 @@ impl LineRange {
     }
 }
 
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum UnauthorizedAction {
+    ExecuteClosure,
+    DeclareFunction,
+    WhileLoop,
+    Include,
+}
+
 /// # An error from `stck`
 ///
 /// A failure that doesn't occour during the runtime of the stck script, but at some other time
 #[derive(thiserror::Error, Debug)]
+#[cfg_attr(not(feature = "exhaustive-errors"), non_exhaustive)]
 pub enum StckError {
     /// Deprecated failure of reading file
     #[deprecated]
@@ -225,7 +235,7 @@ pub enum StckError {
     /// An unknown keyword tried to be tokenized
     #[error("Unknown keyword: {0}")]
     UnknownKeyword(String),
-    /// Will be deprecated
+    #[deprecated]
     #[error("Missing char")]
     MissingChar,
     /// Can't create a closure with zero arguments
@@ -257,6 +267,7 @@ pub enum StckError {
 /// This is usually wrapped by a [context](RuntimeErrorCtx) to display more information
 #[derive(thiserror::Error, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
+#[cfg_attr(not(feature = "exhaustive-errors"), non_exhaustive)]
 pub enum RuntimeErrorKind {
     #[error("Not enough arguments to execute {name}, got {got:?} needs {needs:?}")]
     UserFnMissingArgs {
@@ -376,4 +387,6 @@ pub enum RuntimeErrorKind {
         UserStructMethod,
         Rc<UserStructDef>,
     ),
+    #[error("Tried to execute dissalowed action: {0}")]
+    DisallowedAction(UnauthorizedAction),
 }

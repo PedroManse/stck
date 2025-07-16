@@ -305,3 +305,15 @@ impl Display for Stack {
         write!(f, "]")
     }
 }
+
+impl Display for error::UnauthorizedAction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let x = match self {
+            Self::Include => "Include",
+            Self::WhileLoop => "While loop",
+            Self::ExecuteClosure => "Execute closure",
+            Self::DeclareFunction => "Declare function",
+        };
+        write!(f, "{x}")
+    }
+}

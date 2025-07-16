@@ -11,6 +11,26 @@ use std::rc::Rc;
 
 use self::module::Module;
 
+#[derive(Clone, Copy, Debug)]
+#[allow(clippy::struct_excessive_bools)]
+struct ExecAllowOptions {
+    include: bool,
+    closure: bool,
+    func: bool,
+    while_loop: bool,
+}
+
+impl Default for ExecAllowOptions {
+    fn default() -> Self {
+        Self {
+            include: true,
+            closure: true,
+            func: true,
+            while_loop: true,
+        }
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 enum RuntimeError {
     #[error(transparent)]
@@ -64,6 +84,7 @@ impl From<fn(&mut Context, &Path) -> Result<(), RuntimeErrorKind>> for Hook {
 #[derive(Default, Debug)]
 #[doc(alias = "Runtime")]
 pub struct Context {
+    options: ExecAllowOptions,
     vars: HashMap<String, Value>,
     fns: HashMap<FnName, FnDef>,
     pub stack: Stack,
@@ -85,6 +106,29 @@ impl Context {
     #[must_use]
     pub fn new_raw() -> Self {
         Self::default()
+    }
+
+    pub fn set_all_options(&mut self, opt: bool) {
+        self.options.include = opt;
+        self.options.closure = opt;
+        self.options.func = opt;
+        self.options.while_loop = opt;
+    }
+    pub fn set_option_include(&mut self, opt: bool) -> &mut Self {
+        self.options.include = opt;
+        self
+    }
+    pub fn set_option_closure(&mut self, opt: bool) -> &mut Self {
+        self.options.closure = opt;
+        self
+    }
+    pub fn set_option_func(&mut self, opt: bool) -> &mut Self {
+        self.options.func = opt;
+        self
+    }
+    pub fn set_option_while_loop(&mut self, opt: bool) -> &mut Self {
+        self.options.while_loop = opt;
+        self
     }
 
     /// Gets all enabled modules
@@ -109,21 +153,6 @@ impl Context {
         }
     }
 
-    #[allow(deprecated)]
-    #[deprecated]
-    pub fn register_module(&mut self, module_group: impl module::IntoModules) {
-        for Module { funcs, name } in module_group.into_modules() {
-            self.rust_fns.extend(funcs);
-            self.enabled_modules.insert(name);
-        }
-    }
-
-    #[deprecated]
-    pub fn add_module(&mut self, module: module::Module) {
-        self.rust_fns.extend(module.funcs);
-        self.enabled_modules.insert(module.name);
-    }
-
     pub fn add_rust_hook(&mut self, RustStckFn { name, code }: RustStckFn) -> Option<Hook> {
         self.rust_fns.insert(name, Hook::Raw(code))
     }
@@ -143,49 +172,39 @@ impl Context {
         self.stack
     }
 
-    fn frame_fn(
-        fns: HashMap<FnName, FnDef>,
-        vars: HashMap<String, Value>,
-        args_ins: FnArgsInsCap,
-        rust_fns: HashMap<FnName, Hook>,
-        trc: TypeResolutionBuilder,
-        enabled_modules: HashSet<String>,
-        user_structures: HashSet<Rc<UserStructDef>>,
-    ) -> Self {
+    fn frame_fn(ctx: &Context, vars: HashMap<String, Value>, args_ins: FnArgsInsCap) -> Self {
         let (stack, args) = match args_ins {
             FnArgsInsCap::AllStack(xs) => (Stack::new_with(xs), None),
             FnArgsInsCap::Args(args) => (Stack::new(), Some(args)),
         };
         Self {
+            options: ctx.options,
+            fns: ctx.fns.clone(),
+            rust_fns: ctx.rust_fns.clone(),
+            trc: ctx.trc.clone(),
+            enabled_modules: ctx.enabled_modules.clone(),
+            user_structures: ctx.user_structures.clone(),
             vars,
-            fns,
             stack,
             args,
-            rust_fns,
-            trc,
-            enabled_modules,
-            user_structures,
         }
     }
 
     fn frame_closure(
-        fns: HashMap<FnName, FnDef>,
+        ctx: &Context,
         vars: HashMap<String, Value>,
         args: HashMap<ArgName, FnArg>,
-        rust_fns: HashMap<FnName, Hook>,
-        trc: TypeResolutionBuilder,
-        enabled_modules: HashSet<String>,
-        user_structures: HashSet<Rc<UserStructDef>>,
     ) -> Self {
         Self {
-            enabled_modules,
-            trc,
-            rust_fns,
-            fns,
+            options: ctx.options,
+            enabled_modules: ctx.enabled_modules.clone(),
+            trc: ctx.trc.clone(),
+            rust_fns: ctx.rust_fns.clone(),
+            fns: ctx.fns.clone(),
+            user_structures: ctx.user_structures.clone(),
             vars,
             args: Some(args),
             stack: Stack::new(),
-            user_structures,
         }
     }
 
@@ -244,6 +263,12 @@ impl Context {
                 return self.execute_kw(kw, source);
             }
             ExprCont::Immediate(Value::Closure(cl)) => {
+                if !self.options.closure {
+                    return Err(RuntimeErrorKind::DisallowedAction(
+                        error::UnauthorizedAction::ExecuteClosure,
+                    )
+                    .into());
+                }
                 let cl = cl.clone();
                 if let Some(args) = &self.args {
                     cl.set_parent_args(args.clone()).map_err(|old| {
@@ -257,7 +282,14 @@ impl Context {
             }
             ExprCont::Immediate(v) => self.stack.push(v.clone()),
             ExprCont::IncludedCode(Code { source, exprs }) => {
-                self.execute_code(exprs, source)?;
+                if self.options.include {
+                    self.execute_code(exprs, source)?;
+                } else {
+                    return Err(RuntimeErrorKind::DisallowedAction(
+                        error::UnauthorizedAction::Include,
+                    )
+                    .into());
+                }
             }
         }
         Ok(ControlFlow::Continue)
@@ -348,6 +380,12 @@ impl Context {
                 ControlFlow::Continue
             }
             KeywordKind::While { check, code } => {
+                if !self.options.while_loop {
+                    return Err(RuntimeErrorKind::DisallowedAction(
+                        error::UnauthorizedAction::WhileLoop,
+                    )
+                    .into());
+                }
                 while self.execute_check(check, source)? {
                     match self.execute_code(code, source)? {
                         ControlFlow::Break => break,
@@ -364,6 +402,12 @@ impl Context {
                 args,
                 out_args,
             } => {
+                if !self.options.func {
+                    return Err(RuntimeErrorKind::DisallowedAction(
+                        error::UnauthorizedAction::DeclareFunction,
+                    )
+                    .into());
+                }
                 self.fns.insert(
                     name.clone(),
                     FnDef::new(
@@ -514,15 +558,7 @@ impl Context {
         closure: FullClosure,
         source: &Path,
     ) -> MixedResult<Vec<Value>> {
-        let mut cl_ctx = Context::frame_closure(
-            self.fns.clone(),
-            self.vars.clone(),
-            closure.request_args,
-            self.rust_fns.clone(),
-            self.trc.clone(),
-            self.enabled_modules.clone(),
-            self.user_structures.iter().map(Rc::clone).collect(),
-        );
+        let mut cl_ctx = Context::frame_closure(self, self.vars.clone(), closure.request_args);
         cl_ctx.execute_code(&closure.code, source)?;
         let output = cl_ctx.take_stack().into_vec();
         // TODO: use TRC instance from closure
@@ -583,15 +619,7 @@ impl Context {
             }
             FnArgs::AllStack => FnArgsInsCap::AllStack(self.stack.take()),
         };
-        let mut fn_ctx = Context::frame_fn(
-            self.fns.clone(),
-            vars,
-            args,
-            self.rust_fns.clone(),
-            self.trc.clone(),
-            self.enabled_modules.clone(),
-            self.user_structures.iter().map(Rc::clone).collect(),
-        );
+        let mut fn_ctx = Context::frame_fn(self, vars, args);
 
         // handle (return) kw and RT errors inside functions
         if let Err(e) = fn_ctx.execute_code(&user_fn.code, &user_fn.source) {
