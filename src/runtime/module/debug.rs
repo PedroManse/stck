@@ -17,25 +17,25 @@ use crate::RuntimeContext;
 use std::path::Path;
 
 fn debug_stack(ctx: &mut RuntimeContext, _: &Path) {
-    println!("{:?}", ctx.stack);
+    eprintln!("{:?}", ctx.stack);
 }
 fn debug_stack_pretty(ctx: &mut RuntimeContext, _: &Path) {
-    println!("{}", ctx.stack);
+    eprintln!("{}", ctx.stack);
 }
 fn debug_vars(ctx: &mut RuntimeContext, _: &Path) {
-    println!("{:?}", ctx.vars);
+    eprintln!("{:?}", ctx.vars);
 }
 fn debug_args(ctx: &mut RuntimeContext, _: &Path) {
-    println!("{:?}", ctx.args);
+    eprintln!("{:?}", ctx.args);
 }
 fn debug_fns(ctx: &mut RuntimeContext, _: &Path) {
-    println!("{:?}", ctx.fns);
+    eprintln!("{:?}", ctx.fns);
 }
 fn debug_modules(ctx: &mut RuntimeContext, _: &Path) {
-    println!("{:?}", ctx.enabled_modules);
+    eprintln!("{:?}", ctx.enabled_modules);
 }
 fn debug_generics(ctx: &mut RuntimeContext, _: &Path) {
-    println!("{:?}", ctx.trc);
+    eprintln!("{:?}", ctx.trc);
 }
 
 pub fn make() -> Module {
