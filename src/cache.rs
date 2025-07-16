@@ -137,45 +137,6 @@ impl FileCacher for NoCache {
     }
 }
 
-/// # A mocked file system
-///
-/// A system's [`OverwriteCache`] should be used instead
-///
-/// ~Files can be mocked with [`mock_file`](MockFileCacher::mock_file).~
-/// ~If a file wasan't mocked, [`CacheHelper`] is used as a fallback~
-#[derive(Default)]
-#[deprecated]
-pub struct MockFileCacher(CacheHelper);
-
-#[allow(deprecated)]
-impl MockFileCacher {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-    pub fn mock_file(&mut self, path: PathBuf, content: String) {
-        self.0.overwrite(path, content);
-    }
-}
-
-#[allow(deprecated)]
-impl OverwriteCache for MockFileCacher {
-    fn overwrite(&mut self, path: impl AsRef<Path>, content: String) {
-        self.mock_file(path.as_ref().to_path_buf(), content);
-    }
-}
-
-#[allow(deprecated)]
-impl FileCacher for MockFileCacher {
-    type FileRecord<'s> = CachedFile<'s>;
-    fn read_file(
-        &mut self,
-        path: impl AsRef<Path>,
-    ) -> Result<Self::FileRecord<'_>, std::io::Error> {
-        self.0.read_file(path)
-    }
-}
-
 /// # An isolated cache system
 ///
 /// Only filed specified by [`add_file_cached`](Isolated::add_file_cached) or
