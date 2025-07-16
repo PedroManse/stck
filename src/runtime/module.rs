@@ -16,14 +16,13 @@
 //!
 
 use super::Hook;
-use crate::{FnName, StckError};
 use std::collections::HashMap;
 
 /// # A named collection of functions
 #[derive(Clone)]
 pub struct Module {
     pub(crate) name: String,
-    pub(crate) funcs: HashMap<FnName, Hook>,
+    pub(crate) funcs: HashMap<crate::FnName, Hook>,
 }
 
 impl Module {
@@ -39,14 +38,6 @@ impl Module {
     pub fn add_fn(&mut self, name: impl Into<String>, fnc: Hook) -> Option<Hook> {
         self.funcs.insert(name.into(), fnc)
     }
-
-    #[deprecated]
-    pub fn new(name: String) -> Result<Module, StckError> {
-        Ok(Module {
-            name,
-            funcs: HashMap::new(),
-        })
-    }
 }
 
 impl IntoIterator for Module {
@@ -57,29 +48,9 @@ impl IntoIterator for Module {
     }
 }
 
-#[deprecated]
-pub trait IntoModules {
-    fn into_modules(self) -> impl Iterator<Item = Module>;
-}
-
-#[allow(deprecated)]
-impl IntoModules for Module {
-    fn into_modules(self) -> impl Iterator<Item = Module> {
-        std::iter::once(self)
-    }
-}
-
 pub mod debug;
 pub mod io;
 pub mod map;
-
-#[deprecated]
-pub mod oficial {
-    pub use super::debug::make as debug;
-    #[allow(deprecated)]
-    pub use super::io::io_module;
-    pub use super::io::make as io;
-}
 
 #[must_use]
 pub(crate) fn get_builtin_modules() -> impl IntoIterator<Item = Module> {

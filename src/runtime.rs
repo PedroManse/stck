@@ -153,21 +153,6 @@ impl Context {
         }
     }
 
-    #[allow(deprecated)]
-    #[deprecated]
-    pub fn register_module(&mut self, module_group: impl module::IntoModules) {
-        for Module { funcs, name } in module_group.into_modules() {
-            self.rust_fns.extend(funcs);
-            self.enabled_modules.insert(name);
-        }
-    }
-
-    #[deprecated]
-    pub fn add_module(&mut self, module: module::Module) {
-        self.rust_fns.extend(module.funcs);
-        self.enabled_modules.insert(module.name);
-    }
-
     pub fn add_rust_hook(&mut self, RustStckFn { name, code }: RustStckFn) -> Option<Hook> {
         self.rust_fns.insert(name, Hook::Raw(code))
     }

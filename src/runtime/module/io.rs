@@ -7,7 +7,7 @@
 //! * `io$write-file` `[ content<str> path<str> ][ <result<num><str>> ]`
 
 use crate::{
-    RuntimeContext, RuntimeErrorKind, StckError, Value,
+    RuntimeContext, RuntimeErrorKind, Value,
     runtime::{Hook, module::Module, sget, stack_pop},
 };
 use std::{io::Write, path::Path};
@@ -47,9 +47,4 @@ pub fn make() -> Module {
     io_mod.add_fn("io$read-file", Hook::WithError(read_file));
     io_mod.add_fn("io$write-file", Hook::WithError(write_file));
     io_mod
-}
-
-#[deprecated]
-pub fn io_module() -> Result<Module, StckError> {
-    Ok(make())
 }
