@@ -48,4 +48,3 @@ pub fn make() -> Module {
     io_mod.add_fn("io$write-file", Hook::WithError(write_file));
     io_mod
 }
-
