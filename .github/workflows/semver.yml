@@ -18,3 +18,9 @@ jobs:
     - uses: actions/checkout@v4
     - name: Test publish
       run: cargo publish --dry-run --token ${{ secrets.CRATES_IO_TOKEN }}
+  DontPublishTest:
+    if: ${{ contains( '#nopub', github.event.pull_request.body ) == true }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Skipped
+      run: echo "Cargo publish --dry-run skipped"
