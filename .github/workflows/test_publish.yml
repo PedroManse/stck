@@ -1,0 +1,14 @@
+name: Test Publish
+
+on:
+  pull_request:
+    branches: [ "dev" ]
+
+jobs:
+  PublishTest:
+    if: ${{ true && contains(github.event.pull_request.labels.*.name, 'no-publish') == false }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Test publish
+      run: cargo publish --dry-run --token ${{ secrets.CRATES_IO_TOKEN }}
