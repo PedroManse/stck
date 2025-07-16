@@ -9,5 +9,6 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-      - name: Publish
-        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+    - uses: actions/checkout@v4
+    - name: Publish
+      run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
