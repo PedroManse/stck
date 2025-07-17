@@ -81,8 +81,8 @@ impl Display for TypeTester {
 impl Display for ExprCont {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Immediate(Value::Closure(cl)) => {
-                write!(f, "instantiate Closure at {cl:p}")
+            Self::MakeClosure(cl) => {
+                write!(f, "Instantiate Closure {cl:p}")
             }
             Self::Immediate(v) => {
                 write!(f, "Push value {v:?}")

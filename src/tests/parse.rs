@@ -46,7 +46,7 @@ fn parse_tokens() -> Result<(), crate::error::Error> {
                 },
                 Expr {
                     span: LineRange::from_points(3, 3),
-                    cont: Immediate(crate::Value::Num(0)),
+                    cont: Immediate(crate::ImmdValue::Num(0)),
                 },
                 Expr {
                     span: LineRange::from_points(3, 3),
