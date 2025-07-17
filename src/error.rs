@@ -223,7 +223,6 @@ pub enum StckError {
     CantParseToken(parse::State, Box<TokenCont>, PathBuf),
     #[error("Unknown keyword: {0}")]
     UnknownKeyword(String),
-    MissingChar,
     #[error("Can't make closure with zero arguments, it's code spans these bytes: {span}")]
     CantInstanceClosureZeroArgs { span: LineRange },
     #[error("Parser in file {path}: Can only user param list or '*' as function arguments, not {0}", path=.1.display())]
