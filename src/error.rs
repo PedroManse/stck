@@ -330,6 +330,7 @@ pub enum RuntimeErrorKind {
         closure_args
     )]
     DEVFillFullClosure { closure_args: ClosurePartialArgs },
+    #[deprecated]
     #[error(
         "Closure's arguments ({closure_args:?})'s parent function values are beeing reset with {parent_args:?}"
     )]

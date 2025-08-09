@@ -7,7 +7,6 @@ use super::*;
 pub use runtime::Context as RuntimeContext;
 pub use runtime::Hook as StckHook;
 pub use runtime::module;
-use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -102,7 +101,12 @@ enum ClosureFillError {
 pub struct ClosurePartialArgs {
     pub(crate) next: Vec<FnArgDef>,
     pub(crate) filled: Vec<(ArgName, Value)>,
-    parent: OnceCell<HashMap<ArgName, FnArg>>,
+    parent: Option<HashMap<ArgName, FnArg>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MakeClosurePartialArgs {
+    pub(crate) next: Vec<FnArgDef>,
 }
 
 #[cfg(test)]
@@ -112,18 +116,54 @@ impl PartialEq for ClosurePartialArgs {
     }
 }
 
+impl MakeClosurePartialArgs {
+    #[must_use]
+    fn new(mut arg_list: Vec<FnArgDef>) -> Self {
+        arg_list.reverse();
+        MakeClosurePartialArgs { next: arg_list }
+    }
+    pub(crate) fn parse(arg_list: Vec<FnArgDef>, span: LineRange) -> Result<Self, StckError> {
+        if arg_list.is_empty() {
+            Err(StckError::CantInstanceClosureZeroArgs { span })
+        } else {
+            Ok(Self::new(arg_list))
+        }
+    }
+    fn with_ctx(self, parent_args: Option<HashMap<ArgName, FnArg>>) -> ClosurePartialArgs {
+        ClosurePartialArgs {
+            filled: Vec::with_capacity(self.next.len()),
+            next: self.next,
+            parent: parent_args,
+        }
+    }
+}
+
+impl MakeClosure {
+    pub(crate) fn into_closure(self, parent_args: Option<HashMap<ArgName, FnArg>>) -> Closure {
+        Closure {
+            trc: self.trc,
+            code: self.code,
+            request_args: self.request_args.with_ctx(parent_args),
+            output_types: self.output_types,
+        }
+    }
+}
+
 impl ClosurePartialArgs {
+    #[must_use]
     pub fn get_unfilled_args(&self) -> &[FnArgDef] {
         &self.next
     }
+    #[must_use]
     pub fn take_unfilled_args(self) -> Vec<FnArgDef> {
         self.next
     }
+    #[must_use]
     pub fn get_unfilled_args_count(&self) -> usize {
         self.next.len()
     }
-    fn set_parent(&self, args: HashMap<String, FnArg>) -> Result<(), HashMap<ArgName, FnArg>> {
-        self.parent.set(args)
+    pub fn parse(arg_list: Vec<FnArgDef>, span: LineRange) -> Result<Self, StckError> {
+        MakeClosurePartialArgs::parse(arg_list, span).map(|c| c.with_ctx(None))
     }
     #[must_use]
     fn new(mut arg_list: Vec<FnArgDef>) -> Self {
@@ -131,14 +171,7 @@ impl ClosurePartialArgs {
         ClosurePartialArgs {
             filled: Vec::with_capacity(arg_list.len()),
             next: arg_list,
-            parent: OnceCell::new(),
-        }
-    }
-    pub fn parse(arg_list: Vec<FnArgDef>, span: LineRange) -> Result<Self, StckError> {
-        if arg_list.is_empty() {
-            Err(StckError::CantInstanceClosureZeroArgs { span })
-        } else {
-            Ok(Self::new(arg_list))
+            parent: None,
         }
     }
     pub fn convert(arg_list: Vec<FnArgDef>, fn_name: &str) -> Result<Self, RuntimeErrorKind> {
@@ -168,6 +201,14 @@ impl ClosurePartialArgs {
 }
 
 #[derive(Clone, Debug)]
+pub struct MakeClosure {
+    pub(crate) trc: TypeResolutionContext,
+    pub(crate) code: Vec<Expr>,
+    pub(crate) request_args: MakeClosurePartialArgs,
+    pub(crate) output_types: Option<TypedOutputs>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Closure {
     pub(crate) trc: TypeResolutionContext,
     pub(crate) code: Vec<Expr>,
@@ -185,17 +226,13 @@ impl Closure {
     pub(crate) fn get_unfilled_args_count(&self) -> usize {
         self.get_args().get_unfilled_args_count()
     }
+    #[deprecated]
+    pub fn set_parent_args(&self, _: HashMap<ArgName, FnArg>) {}
     pub(crate) fn get_output_types(&self) -> Option<&TypedOutputs> {
         self.output_types.as_ref()
     }
     pub(crate) fn get_args(&self) -> &ClosurePartialArgs {
         &self.request_args
-    }
-    pub fn set_parent_args(
-        &self,
-        args: HashMap<String, FnArg>,
-    ) -> Result<(), HashMap<String, FnArg>> {
-        self.request_args.set_parent(args)
     }
     pub(crate) fn fill(mut self, value: Value) -> Result<ClosureCurry, RuntimeErrorKind> {
         if let Err(r) = self.request_args.fill(value, &mut self.trc) {
@@ -207,7 +244,7 @@ impl Closure {
             });
         }
         Ok(if self.request_args.is_full() {
-            let args = if let Some(parent_args) = self.request_args.parent.get() {
+            let args = if let Some(parent_args) = self.request_args.parent {
                 let mut closure_args = parent_args.clone();
                 for (k, v) in self.request_args.filled {
                     closure_args.insert(k, FnArg(v));
@@ -231,6 +268,12 @@ impl Closure {
     }
 }
 impl PartialEq for Closure {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+impl PartialEq for MakeClosure {
     fn eq(&self, _: &Self) -> bool {
         false
     }
@@ -778,8 +821,18 @@ pub struct Expr {
 
 #[cfg_attr(test, derive(PartialEq))]
 #[derive(Clone, Debug)]
+pub enum ImmdValue {
+    Str(String),
+    Num(isize),
+    Float(f64),
+    Char(char),
+}
+
+#[cfg_attr(test, derive(PartialEq))]
+#[derive(Clone, Debug)]
 pub enum ExprCont {
-    Immediate(Value),
+    MakeClosure(MakeClosure),
+    Immediate(ImmdValue),
     FnCall(FnName),
     Keyword(KeywordKind),
     IncludedCode(Code),
@@ -890,5 +943,16 @@ impl RustStckFn {
 impl std::fmt::Debug for RustStckFn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Rust function {}", self.name)
+    }
+}
+
+impl From<ImmdValue> for Value {
+    fn from(value: ImmdValue) -> Self {
+        match value {
+            ImmdValue::Str(v) => Value::Str(v),
+            ImmdValue::Num(v) => Value::Num(v),
+            ImmdValue::Char(v) => Value::Char(v),
+            ImmdValue::Float(v) => Value::Float(v),
+        }
     }
 }

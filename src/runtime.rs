@@ -262,25 +262,18 @@ impl Context {
             ExprCont::Keyword(kw) => {
                 return self.execute_kw(kw, source);
             }
-            ExprCont::Immediate(Value::Closure(cl)) => {
+            ExprCont::MakeClosure(cl) => {
                 if !self.options.closure {
                     return Err(RuntimeErrorKind::DisallowedAction(
                         error::UnauthorizedAction::ExecuteClosure,
                     )
                     .into());
                 }
-                let cl = cl.clone();
-                if let Some(args) = &self.args {
-                    cl.set_parent_args(args.clone()).map_err(|old| {
-                        RuntimeErrorKind::DEVResettingParentValuesForClosure {
-                            closure_args: Box::new(cl.request_args.clone()),
-                            parent_args: old,
-                        }
-                    })?;
-                }
-                self.stack.push(Value::Closure(cl));
+                let make_cl = cl.clone();
+                let cl = make_cl.into_closure(self.args.clone());
+                self.stack.push(Value::Closure(Box::new(cl)));
             }
-            ExprCont::Immediate(v) => self.stack.push(v.clone()),
+            ExprCont::Immediate(v) => self.stack.push(v.clone().into()),
             ExprCont::IncludedCode(Code { source, exprs }) => {
                 if self.options.include {
                     self.execute_code(exprs, source)?;
