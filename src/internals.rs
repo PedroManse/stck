@@ -4,6 +4,7 @@
 
 use super::*;
 
+pub type HostContext = runtime::Context<'static>;
 pub use runtime::Context as RuntimeContext;
 pub use runtime::Hook as StckHook;
 pub use runtime::module;
