@@ -87,6 +87,47 @@ pub enum FnArgs {
     AllStack,
 }
 
+impl FnArgs {
+    pub(crate) fn capture(
+        self,
+        ctx: &mut RuntimeContext,
+        fn_name: &str,
+        trc: &mut TypeResolutionContext,
+    ) -> Result<FnArgsInsCap, error::RuntimeErrorKind> {
+        match &self {
+            FnArgs::Args(args) => {
+                let Some(args_stack) = ctx.stack.popn(args.len()) else {
+                    return Err(error::RuntimeErrorKind::UserFnMissingArgs {
+                        name: fn_name.to_string(),
+                        got: ctx.get_stack().to_vec(),
+                        needs: self.into_needs(),
+                    }
+                    .into());
+                };
+                args.iter()
+                    .zip(args_stack.into_iter().map(FnArg))
+                    .map(|(cap, ins)| {
+                        if let Err(type_check_error) = trc.check_closure_arg(cap, &ins) {
+                            if TypeTesterEq::ClosureAny == type_check_error.as_eq() {
+                                Err(RuntimeErrorKind::TypeType(
+                                    type_check_error,
+                                    TypeTester::from(&ins.0),
+                                ))
+                            } else {
+                                Err(RuntimeErrorKind::Type(type_check_error, Box::new(ins.0)))
+                            }
+                        } else {
+                            Ok((cap.get_name().to_string(), ins))
+                        }
+                    })
+                    .collect::<Result<_, error::RuntimeErrorKind>>()
+                    .map(FnArgsInsCap::Args)
+            }
+            FnArgs::AllStack => Ok(FnArgsInsCap::AllStack(ctx.stack.take())),
+        }
+    }
+}
+
 pub(crate) enum ClosureCurry {
     Full(FullClosure),
     Partial(Closure),
