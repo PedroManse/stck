@@ -81,21 +81,10 @@ impl From<fn(&mut Context, &Path) -> Result<(), RuntimeErrorKind>> for Hook {
     }
 }
 
-#[derive(Debug)]
-pub struct ParentContext<'p> {
-    ctx: &'p Context<'p>,
-}
-
-impl<'p> ParentContext<'p> {
-    fn new(ctx: &'p Context) -> Self {
-        Self { ctx }
-    }
-}
-
 #[derive(Default, Debug)]
 #[doc(alias = "Runtime")]
 pub struct Context<'p> {
-    parent: Option<ParentContext<'p>>,
+    parent: Option<&'p Context<'p>>,
     options: ExecAllowOptions,
     vars: HashMap<String, Value>,
     fns: HashMap<FnName, FnDef>,
@@ -196,16 +185,13 @@ impl<'p> Context<'p> {
             FnArgsInsCap::Args(args) => (Stack::new(), Some(args)),
         };
         Self {
-            parent: Some(ParentContext::new(ctx)),
+            parent: Some(ctx),
             options: ctx.options,
-            fns: ctx.fns.clone(),
-            rust_fns: ctx.rust_fns.clone(),
             trc: ctx.trc.clone(),
-            enabled_modules: ctx.enabled_modules.clone(),
-            user_structures: ctx.user_structures.clone(),
             vars,
             stack,
             args,
+            ..Context::default()
         }
     }
 
@@ -215,16 +201,13 @@ impl<'p> Context<'p> {
         args: HashMap<ArgName, FnArg>,
     ) -> Context<'p> {
         Self {
-            parent: Some(ParentContext::new(ctx)),
+            parent: Some(ctx),
             options: ctx.options,
-            enabled_modules: ctx.enabled_modules.clone(),
             trc: ctx.trc.clone(),
-            rust_fns: ctx.rust_fns.clone(),
-            fns: ctx.fns.clone(),
-            user_structures: ctx.user_structures.clone(),
             vars,
             args: Some(args),
             stack: Stack::new(),
+            ..Context::default()
         }
     }
 
@@ -1060,23 +1043,5 @@ impl<'p> Context<'p> {
             Ok(m) => Some(Ok((m, stct))),
             Err(e) => Some(Err(e)),
         }
-    }
-}
-
-impl<'p> ParentContext<'p> {
-    fn find_arg(&self, name: &ArgName) -> Option<Value> {
-        self.ctx.find_arg(name)
-    }
-    fn find_user_fn(&self, name: &FnName) -> Option<FnDef> {
-        self.ctx.find_user_fn(name)
-    }
-    fn find_hook(&self, name: &FnName) -> Option<Hook> {
-        self.ctx.find_hook(name)
-    }
-    fn find_method(
-        &self,
-        name: &FnName,
-    ) -> Option<Result<(UserStructMethod, Rc<UserStructDef>), RuntimeErrorKind>> {
-        self.ctx.find_method(name)
     }
 }

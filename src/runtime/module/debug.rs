@@ -37,6 +37,9 @@ fn debug_modules(ctx: &mut RuntimeContext, _: &Path) {
 fn debug_generics(ctx: &mut RuntimeContext, _: &Path) {
     eprintln!("{:?}", ctx.trc);
 }
+fn debug_ctx(ctx: &mut RuntimeContext, _: &Path) {
+    eprintln!("{:?}", ctx);
+}
 
 pub fn make() -> Module {
     let mut debug_mod = Module::empty("debug".to_string());
@@ -47,5 +50,6 @@ pub fn make() -> Module {
     debug_mod.add_fn("debug$fns", Hook::Raw(debug_fns));
     debug_mod.add_fn("debug$modules", Hook::Raw(debug_modules));
     debug_mod.add_fn("debug$generics", Hook::Raw(debug_generics));
+    debug_mod.add_fn("debug$ctx", Hook::Raw(debug_ctx));
     debug_mod
 }

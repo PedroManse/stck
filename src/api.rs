@@ -85,7 +85,7 @@ pub fn execute_file(path: impl AsRef<Path>, file_cache: &mut impl FileCacher) ->
 /// let ctx = stck::api::execute_raw_code(&code).unwrap();
 /// assert_eq!(ctx.get_stack()[0], stck::internals::Value::Num(3));
 /// ```
-pub fn execute_raw_code(code: &Code) -> SResult<runtime::Context<'static>> {
+pub fn execute_raw_code(code: &Code) -> SResult<HostContext> {
     execute_code(code)
 }
 
@@ -134,7 +134,7 @@ fn preproc_tokens_with_vars<S: std::hash::BuildHasher>(
 }
 
 // step for runtime:
-fn execute_code(code: &Code) -> SResult<runtime::Context<'static>> {
+fn execute_code(code: &Code) -> SResult<HostContext> {
     let mut executioner = runtime::Context::new();
     executioner
         .execute_entire_code(code)
