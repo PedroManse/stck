@@ -1,2 +1,2 @@
 # global function will pass on defined variables as globals
-(fn*) [ name<str> value<T> ] [] { name value set }
+(fn*) [ name<str> value<T> ] [] set-global { name value set }

@@ -100,6 +100,8 @@ impl Display for ExprCont {
             Self::Keyword(k) => {
                 write!(f, "Keyword: ")?;
                 match k {
+                    KeywordKind::TryClosure => write!(f, "Try executing closure"),
+                    KeywordKind::Try { fn_name } => write!(f, "Try executing function {fn_name}"),
                     KeywordKind::Structure { name, .. } => write!(f, "Struct {name}"),
                     KeywordKind::Require(mn) => write!(f, "Require module {mn}"),
                     KeywordKind::DefinedGeneric(g) => write!(f, "Define generic {g:?}"),

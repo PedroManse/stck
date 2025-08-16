@@ -842,6 +842,10 @@ pub enum KeywordKind {
     },
     DefinedGeneric(DefinedGenericBuilder),
     Require(String),
+    Try {
+        fn_name: String,
+    },
+    TryClosure,
 }
 
 #[cfg_attr(test, derive(PartialEq))]
@@ -900,6 +904,8 @@ pub enum RawKeyword {
     Switch,
     Break,
     Require(String),
+    Try(String),
+    TryClosure,
 }
 
 #[cfg_attr(test, derive(PartialEq))]

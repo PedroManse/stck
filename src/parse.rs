@@ -91,6 +91,14 @@ impl<'p> Context<'p> {
                     push_expr!(E::Keyword(KeywordKind::DefinedGeneric(trc)));
                     Nothing
                 }
+                (Nothing, Keyword(RawKeyword::Try(fn_name))) => {
+                    push_expr!(E::Keyword(KeywordKind::Try { fn_name }));
+                    Nothing
+                }
+                (Nothing, Keyword(RawKeyword::TryClosure)) => {
+                    push_expr!(E::Keyword(KeywordKind::TryClosure));
+                    Nothing
+                }
                 (Nothing, Keyword(RawKeyword::Require(module_name))) => {
                     push_expr!(E::Keyword(KeywordKind::Require(module_name)));
                     Nothing

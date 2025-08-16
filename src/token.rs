@@ -221,6 +221,7 @@ impl Context {
                         "switch" => RawKeyword::Switch,
                         "break" => RawKeyword::Break,
                         "ifs" => RawKeyword::Ifs,
+                        "try @" => RawKeyword::TryClosure,
                         otherwise => {
                             let include =
                                 otherwise
@@ -255,12 +256,18 @@ impl Context {
                                 .map(str::trim)
                                 .map(String::from)
                                 .map(RawKeyword::Require);
+                            let try_fn = otherwise
+                                .strip_prefix("try ")
+                                .map(str::trim)
+                                .map(String::from)
+                                .map(RawKeyword::Try);
                             include
                                 .or(pragma)
                                 .or(fn_into_closure)
                                 .or(trc)
                                 .or(require_old_protected)
                                 .or(require)
+                                .or(try_fn)
                                 .ok_or(StckError::UnknownKeyword(otherwise.to_string()))?
                         }
                     };

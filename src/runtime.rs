@@ -322,6 +322,45 @@ impl<'p> Context<'p> {
                 self.user_structures.insert(Rc::new(stct));
                 ControlFlow::Continue
             }
+            KeywordKind::Try { fn_name } => {
+                let fn_def = self
+                    .find_user_fn(fn_name)
+                    .ok_or(RuntimeErrorKind::MissingIdent(fn_name.clone()))?;
+                colored::control::SHOULD_COLORIZE.set_override(false);
+                let rets = self
+                    .execute_user_fn(fn_name, fn_def)
+                    .map(Value::Array)
+                    .map_err(|e| e.to_string())
+                    .map_err(Value::Str);
+                colored::control::SHOULD_COLORIZE.unset_override();
+                self.stack.push_this(rets);
+                ControlFlow::Continue
+            }
+            KeywordKind::TryClosure => {
+                let v = stack_pop!((self.stack) -> * as "value" for "(try @) keyword")?;
+                let cl = stack_pop!((self.stack) -> closure as "closure" for "(try @) keyword")?;
+                let cl = cl.fill(v).map_err(|e| e.to_string()).map_err(Value::Str);
+
+                match cl {
+                    Err(s) => {
+                        self.stack.push_this(s);
+                    }
+                    Ok(ClosureCurry::Partial(cl)) => {
+                        self.stack.push_this(cl);
+                    }
+                    Ok(ClosureCurry::Full(cl)) => {
+                        colored::control::SHOULD_COLORIZE.set_override(false);
+                        let result = self
+                            .try_execute_user_closure(cl, source)
+                            .map_err(|e| e.to_string())
+                            .map_err(Value::Str)
+                            .map(Value::Array);
+                        colored::control::SHOULD_COLORIZE.unset_override();
+                        self.stack.push_this(Value::Result(Box::new(result)));
+                    }
+                }
+                ControlFlow::Continue
+            }
             KeywordKind::Require(module_name) => {
                 return if self.enabled_modules.contains(module_name) {
                     Ok(ControlFlow::Continue)
@@ -719,6 +758,20 @@ impl<'p> Context<'p> {
                     .checked_div(rhs)
                     .ok_or(RuntimeErrorKind::DivByZero(lhs))?;
                 self.stack.push_this(r);
+            }
+            "/?" => {
+                let rhs = stack_pop!(
+                    (self.stack) -> num as "rhs" for fn_name
+                )?;
+                let lhs = stack_pop!(
+                    (self.stack) -> num as "lhs" for fn_name
+                )?;
+                let r = lhs
+                    .checked_div(rhs)
+                    .ok_or("Division by zero".to_string())
+                    .map(Value::Num)
+                    .map_err(Value::Str);
+                self.stack.push_this(Value::Result(Box::new(r)));
             }
             "./" => {
                 let rhs = stack_pop!(
