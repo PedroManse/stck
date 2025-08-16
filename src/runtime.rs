@@ -54,18 +54,18 @@ type MixedResult<T> = std::result::Result<T, RuntimeError>;
 
 #[derive(Clone, Debug)]
 pub enum Hook {
-    Raw(fn(&mut Context, &Path)),
-    WithError(fn(&mut Context, &Path) -> Result<(), RuntimeErrorKind>),
+    Raw(for<'p> fn(&mut Context<'p>, &Path)),
+    WithError(for<'p> fn(&mut Context, &Path) -> Result<(), RuntimeErrorKind>),
 }
 
 impl Hook {
-    pub fn call(&self, ctx: &mut Context, source: &Path) -> Result<(), RuntimeErrorKind> {
+    fn call(&self, ctx: &mut Context, source: &Path) -> Result<(), RuntimeError> {
         match self {
             Hook::Raw(c) => {
                 c(ctx, source);
                 Ok(())
             }
-            Hook::WithError(c) => c(ctx, source),
+            Hook::WithError(c) => c(ctx, source).map_err(RuntimeError::RuntimeRaw),
         }
     }
 }
@@ -83,9 +83,11 @@ impl From<fn(&mut Context, &Path) -> Result<(), RuntimeErrorKind>> for Hook {
 
 #[derive(Default, Debug)]
 #[doc(alias = "Runtime")]
-pub struct Context {
+pub struct Context<'p> {
+    parent: Option<&'p Context<'p>>,
     options: ExecAllowOptions,
     vars: HashMap<String, Value>,
+    global_vars: HashMap<String, Value>,
     fns: HashMap<FnName, FnDef>,
     pub stack: Stack,
     args: Option<HashMap<ArgName, FnArg>>,
@@ -95,14 +97,16 @@ pub struct Context {
     user_structures: HashSet<Rc<UserStructDef>>,
 }
 
-impl Context {
+impl Context<'static> {
     #[must_use]
     pub fn new() -> Self {
         let mut ctx = Self::default();
         ctx.register_modules(module::get_builtin_modules());
         ctx
     }
+}
 
+impl<'p> Context<'p> {
     #[must_use]
     pub fn new_raw() -> Self {
         Self::default()
@@ -172,39 +176,39 @@ impl Context {
         self.stack
     }
 
-    fn frame_fn(ctx: &Context, vars: HashMap<String, Value>, args_ins: FnArgsInsCap) -> Self {
+    fn frame_fn(
+        ctx: &'p Context<'p>,
+        vars: HashMap<String, Value>,
+        args_ins: FnArgsInsCap,
+    ) -> Context<'p> {
         let (stack, args) = match args_ins {
             FnArgsInsCap::AllStack(xs) => (Stack::new_with(xs), None),
             FnArgsInsCap::Args(args) => (Stack::new(), Some(args)),
         };
         Self {
+            parent: Some(ctx),
             options: ctx.options,
-            fns: ctx.fns.clone(),
-            rust_fns: ctx.rust_fns.clone(),
             trc: ctx.trc.clone(),
-            enabled_modules: ctx.enabled_modules.clone(),
-            user_structures: ctx.user_structures.clone(),
             vars,
             stack,
             args,
+            ..Context::default()
         }
     }
 
     fn frame_closure(
-        ctx: &Context,
+        ctx: &'p Context,
         vars: HashMap<String, Value>,
         args: HashMap<ArgName, FnArg>,
-    ) -> Self {
+    ) -> Context<'p> {
         Self {
+            parent: Some(ctx),
             options: ctx.options,
-            enabled_modules: ctx.enabled_modules.clone(),
             trc: ctx.trc.clone(),
-            rust_fns: ctx.rust_fns.clone(),
-            fns: ctx.fns.clone(),
-            user_structures: ctx.user_structures.clone(),
             vars,
             args: Some(args),
             stack: Stack::new(),
+            ..Context::default()
         }
     }
 
@@ -425,40 +429,34 @@ impl Context {
             Err(e) => return Err(e),
         }
 
-        if let Some(arg) = self.try_get_arg(name) {
-            // try_get_arg should not pop from the stack and has higher precedence than user-defined funcs.
-            // this was done to avoid confusion if an outer-scoped function was used instead of an argument
+        // find_F discovers *if* the action exists
+        // execute_F executes the function
+        if let Some(arg) = self.find_arg(name) {
+            // There's no "execute_arg", since it just pushes and item in the stack
             self.stack.push(arg);
-        } else if let Some(rets) = self.try_execute_user_fn(name) {
-            // try_execute_user_fn should handle stack pop
-            // and have the lowest precedence, since they traverse the scopes
-            self.stack.pushn(rets?);
-        } else if let Some(res) = self.try_execute_rust_hook(name, source) {
-            res?;
-        } else if let Some(res) = self.try_execute_method(name) {
-            res?;
+            Ok(())
+        } else if let Some(user_fn) = self.find_user_fn(name) {
+            // execute_user_fn creates a child context (with this `self` as parent), gets the
+            // function's context
+            let rets = self.execute_user_fn(name, user_fn)?;
+            self.stack.pushn(rets);
+            Ok(())
+        } else if let Some(hook) = self.find_hook(name) {
+            // There's also no "execute_hook" since the hook itself is the execution function
+            hook.call(self, source)
+        } else if let Some(method) = self.find_method(name) {
+            let (method, stct) = method?;
+            self.execute_method(method, &stct)
         } else {
-            return Err(Rtk::MissingIdent(name.clone()).into());
+            Err(Rtk::MissingIdent(name.clone()).into())
         }
-        Ok(())
-    }
-
-    fn try_execute_method(&mut self, name: &FnName) -> Option<Result<(), RuntimeErrorKind>> {
-        let (method, stct) = self
-            .user_structures
-            .iter()
-            .find_map(|stct| Some((stct.is_method_of(name)?, Rc::clone(stct))))?;
-        Some(match method {
-            Ok(m) => self.execute_method(m, &stct),
-            Err(e) => Err(e.into_runtime_error_kind(name.to_string())),
-        })
     }
 
     fn execute_method(
         &mut self,
         method: UserStructMethod,
         stct: &Rc<UserStructDef>,
-    ) -> Result<(), RuntimeErrorKind> {
+    ) -> Result<(), RuntimeError> {
         match method {
             UserStructMethod::New => {
                 let values = self
@@ -570,8 +568,7 @@ impl Context {
         Ok(output)
     }
 
-    fn try_execute_user_fn(&mut self, name: &FnName) -> Option<MixedResult<Vec<Value>>> {
-        let user_fn = self.fns.get(name)?;
+    fn execute_user_fn(&mut self, name: &str, user_fn: FnDef) -> MixedResult<Vec<Value>> {
         let mut trc: TypeResolutionContext = self.trc.clone().into();
 
         let vars = match user_fn.scope {
@@ -579,84 +576,38 @@ impl Context {
             _ => self.vars.clone(),
         };
 
-        let args = match &user_fn.args {
-            FnArgs::Args(args) => {
-                let Some(args_stack) = self.stack.popn(args.len()) else {
-                    return Some(Err(Rtk::UserFnMissingArgs {
-                        name: name.as_str().to_string(),
-                        got: self.get_stack().to_vec(),
-                        needs: user_fn.args.clone().into_needs(),
-                    }
-                    .into()));
-                };
-                let arg_map = args
-                    .iter()
-                    .zip(args_stack.into_iter().map(FnArg))
-                    .map(|(cap, ins)| {
-                        if let Err(type_check_error) = trc.check_closure_arg(cap, &ins) {
-                            if TypeTesterEq::ClosureAny == type_check_error.as_eq() {
-                                Err(Rtk::TypeType(type_check_error, TypeTester::from(&ins.0)))
-                            } else {
-                                Err(Rtk::Type(type_check_error, Box::new(ins.0)))
-                            }
-                        } else {
-                            Ok((cap.get_name().to_string(), ins))
-                        }
-                    })
-                    .collect::<Result<_, error::RuntimeErrorKind>>();
-                let arg_map = match arg_map {
-                    Err(e) => return Some(Err(e.into())),
-                    Ok(a) => a,
-                };
-                FnArgsInsCap::Args(arg_map)
+        let args = user_fn.args.capture(self, name, &mut trc)?;
+        let (fn_vars, fn_global_vars, fn_output) = {
+            let mut fn_ctx = Context::frame_fn(self, vars, args);
+            if let Err(e) = fn_ctx.execute_code(&user_fn.code, &user_fn.source) {
+                return Err(e.into());
             }
-            FnArgs::AllStack => FnArgsInsCap::AllStack(self.stack.take()),
+
+            let output = fn_ctx.stack.into_vec();
+            (fn_ctx.vars, fn_ctx.global_vars, output)
         };
-        let mut fn_ctx = Context::frame_fn(self, vars, args);
-
-        // handle (return) kw and RT errors inside functions
-        if let Err(e) = fn_ctx.execute_code(&user_fn.code, &user_fn.source) {
-            return Some(Err(e.into()));
-        }
-
         if let FnScope::Global = user_fn.scope {
-            self.vars.extend(fn_ctx.vars);
+            self.global_vars.extend(fn_vars);
         }
-        let output = fn_ctx.stack.into_vec();
+        self.global_vars.extend(fn_global_vars);
+
         if let Some(out_tt) = &user_fn.output_types {
-            let err = match trc.check_outputs(out_tt, &output) {
+            let err = match trc.check_outputs(out_tt, &fn_output) {
                 Ok(()) => None,
                 Err(TypedOutputError::TypeError(t, v)) => Some(Rtk::Type(t, Box::new(v))),
                 Err(TypedOutputError::OutputCountError { expected, got }) => {
                     Some(Rtk::OutputCount {
-                        fn_name: name.clone(),
+                        fn_name: name.to_string(),
                         expected,
                         got,
                     })
                 }
             };
             if let Some(err) = err {
-                return Some(Err(err.into()));
+                return Err(err.into());
             }
         }
-        Some(Ok(output))
-    }
-
-    fn try_get_arg(&mut self, name: &ArgName) -> Option<Value> {
-        if let Some(args) = &self.args {
-            args.get(name).map(|arg| arg.0.clone())
-        } else {
-            None
-        }
-    }
-
-    fn try_execute_rust_hook(
-        &mut self,
-        name: &FnName,
-        source: &Path,
-    ) -> Option<Result<(), RuntimeErrorKind>> {
-        let rfn = self.rust_fns.get(name)?.clone();
-        Some(rfn.call(self, source))
+        Ok(fn_output)
     }
 
     fn try_execute_builtin(&mut self, fn_name: &str, source: &Path) -> MixedResult<Option<()>> {
@@ -837,7 +788,7 @@ impl Context {
                 let name = stack_pop!(
                     (self.stack) -> str as "name" for fn_name
                 )?;
-                match self.vars.get(&name) {
+                match self.find_var(&name) {
                     None => {
                         return Err(Rtk::NoSuchVariable(name).into());
                     }
@@ -1046,5 +997,62 @@ impl Context {
             }
         }
         Ok(Some(()))
+    }
+}
+
+impl<'p> Context<'p> {
+    fn find_arg(&self, name: &ArgName) -> Option<Value> {
+        self.interal_find_arg(name)
+            .or(self.parent.as_ref().and_then(|p| p.find_arg(name)))
+    }
+    fn find_user_fn(&self, name: &FnName) -> Option<FnDef> {
+        self.interal_find_user_fn(name)
+            .or(self.parent.as_ref().and_then(|p| p.find_user_fn(name)))
+    }
+    fn find_hook(&self, name: &FnName) -> Option<Hook> {
+        self.interal_find_hook(name)
+            .or(self.parent.as_ref().and_then(|p| p.find_hook(name)))
+    }
+    fn find_method(
+        &self,
+        name: &FnName,
+    ) -> Option<Result<(UserStructMethod, Rc<UserStructDef>), RuntimeErrorKind>> {
+        self.interal_find_method(name)
+            .map(|r| r.map_err(|e| e.into_runtime_error_kind(name.to_string())))
+            .or(self.parent.as_ref().and_then(|p| p.find_method(name)))
+    }
+    fn find_var(&self, name: &str) -> Option<&Value> {
+        self.internal_find_var(name)
+            .or(self.parent.as_ref().and_then(|p| p.find_var(name)))
+    }
+
+    fn internal_find_var(&self, name: &str) -> Option<&Value> {
+        self.vars.get(name).or(self.global_vars.get(name))
+    }
+    fn interal_find_arg(&self, name: &ArgName) -> Option<Value> {
+        if let Some(args) = &self.args {
+            args.get(name).map(|arg| arg.0.clone())
+        } else {
+            None
+        }
+    }
+    fn interal_find_user_fn(&self, name: &FnName) -> Option<FnDef> {
+        self.fns.get(name).cloned()
+    }
+    fn interal_find_hook(&self, name: &FnName) -> Option<Hook> {
+        self.rust_fns.get(name).cloned()
+    }
+    fn interal_find_method(
+        &self,
+        name: &FnName,
+    ) -> Option<Result<(UserStructMethod, Rc<UserStructDef>), MethodErrorPart>> {
+        let (method, stct) = self
+            .user_structures
+            .iter()
+            .find_map(|stct| Some((stct.is_method_of(name)?, Rc::clone(stct))))?;
+        match method {
+            Ok(m) => Some(Ok((m, stct))),
+            Err(e) => Some(Err(e)),
+        }
     }
 }

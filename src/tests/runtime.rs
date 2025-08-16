@@ -2,13 +2,13 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::{
-    ErrCtx, RuntimeErrorCtx, RuntimeErrorKind, api,
+    ErrCtx, HostContext, RuntimeErrorCtx, RuntimeErrorKind, api,
     cache::Isolated,
     error::Error,
     internals::{self, ImmdValue, RuntimeContext, RustStckFn, Value},
 };
 
-fn execute_string(cont: &str, test_name: &str) -> Result<RuntimeContext, Error> {
+fn execute_string(cont: &str, test_name: &str) -> Result<HostContext, Error> {
     let mut file_cacher = Isolated::new();
     let tokens = api::get_tokens_str(cont, test_name, &mut file_cacher)?;
     let code = api::parse_raw_tokens(tokens)?;

@@ -1,48 +1,58 @@
 #! stck
 (include stdlib)
-argv$init
+(pragma set test)
 
-(fn) * sh! { %% sh ! drop }
 
-(ifs) {argv$is-empty} {
+(pragma if test)
+	(fn) * sh! { %% "[CMD]: %s\n" %% print }
+(pragma else)
+	(fn) * sh! { %% sh ! drop }
+(pragma end if)
+
+(fn) [] main {
+
+	argv$pop dup
+		"cargo new --bin %s" sh!
+		"cd %s" sh!
+
+	"
+	target
+	shell.nix
+	.envrc
+	" str$trim ".gitignore" write-to ok!!
+
+	"" argv$rest drop
+	"crate_name" set
+	arr$new "feats" set
+	(while) { stack$has } {
+		(ifs)
+			{ "-" &str$has-prefix } {
+				"-" str$remove-prefix
+				"feats" get
+					arr$append
+					"feats" set
+			}
+			{ "feats" get arr$is-empty } {
+				"crate_name" get
+					"cargo add %s" sh!
+				"crate_name" set
+			}
+			{ true } {
+				"feats" get
+					" " arr$join
+				"crate_name" get
+					"cargo add %s --features %s"
+				sh!
+				arr$new "feats" set
+				"crate_name" set
+			}
+	}
+
+}
+
+argv$init (ifs) { argv$is-empty } {
 	"usage: <proj_name> [crate [-feat]]\n" print
 	1 sys$exit
 }
 
-argv$pop dup
-	"cargo new --bin %s" sh!
-	"cd %s" sh!
-
-"
-target
-shell.nix
-.envrc
-" str$trim ".gitignore" write-to ok!!
-
-"" argv$rest drop
-"crate_name" set
-arr$new "feats" set
-(while) { stack$has } {
-	(ifs)
-		{ "-" &str$has-prefix } {
-			"-" str$remove-prefix
-			"feats" get
-				arr$append
-				"feats" set
-		}
-		{ "feats" get arr$is-empty } {
-			"crate_name" get
-				"cargo add %s" sh!
-			"crate_name" set
-		}
-		{ true } {
-			"feats" get
-				" " arr$join
-			"crate_name" get
-				"cargo add %s --features %s"
-			sh!
-			arr$new "feats" set
-			"crate_name" set
-		}
-}
-
+main
