@@ -101,8 +101,7 @@ impl FnArgs {
                         name: fn_name.to_string(),
                         got: ctx.get_stack().to_vec(),
                         needs: self.into_needs(),
-                    }
-                    .into());
+                    });
                 };
                 args.iter()
                     .zip(args_stack.into_iter().map(FnArg))
@@ -268,8 +267,6 @@ impl Closure {
     pub(crate) fn get_unfilled_args_count(&self) -> usize {
         self.get_args().get_unfilled_args_count()
     }
-    #[deprecated]
-    pub fn set_parent_args(&self, _: HashMap<ArgName, FnArg>) {}
     pub(crate) fn get_output_types(&self) -> Option<&TypedOutputs> {
         self.output_types.as_ref()
     }

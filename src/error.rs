@@ -3,7 +3,6 @@
 use super::*;
 use crate::cache::FileCacher;
 use colored::Colorize;
-use std::collections::hash_map::HashMap;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -223,9 +222,6 @@ pub enum StckError {
     CantParseToken(parse::State, Box<TokenCont>, PathBuf),
     #[error("Unknown keyword: {0}")]
     UnknownKeyword(String),
-    #[deprecated]
-    #[error("Missing char")]
-    MissingChar,
     #[error("Can't make closure with zero arguments, it's code spans these bytes: {span}")]
     CantInstanceClosureZeroArgs { span: LineRange },
     #[error("Parser in file {path}: Can only user param list or '*' as function arguments, not {0}", path=.1.display())]
@@ -330,14 +326,6 @@ pub enum RuntimeErrorKind {
         closure_args
     )]
     DEVFillFullClosure { closure_args: ClosurePartialArgs },
-    #[deprecated]
-    #[error(
-        "Closure's arguments ({closure_args:?})'s parent function values are beeing reset with {parent_args:?}"
-    )]
-    DEVResettingParentValuesForClosure {
-        closure_args: Box<ClosurePartialArgs>,
-        parent_args: HashMap<ArgName, FnArg>,
-    },
     #[error(
         "DEV ERROR, this error should never appear to you:\nThe struct {0}, with method {1:?}, tried using field with index {2}; {3}"
     )]
