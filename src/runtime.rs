@@ -87,6 +87,7 @@ pub struct Context<'p> {
     parent: Option<&'p Context<'p>>,
     options: ExecAllowOptions,
     vars: HashMap<String, Value>,
+    global_vars: HashMap<String, Value>,
     fns: HashMap<FnName, FnDef>,
     pub stack: Stack,
     args: Option<HashMap<ArgName, FnArg>>,
@@ -576,19 +577,22 @@ impl<'p> Context<'p> {
         };
 
         let args = user_fn.args.capture(self, name, &mut trc)?;
-        let mut fn_ctx = Context::frame_fn(self, vars, args);
+        let (fn_vars, fn_global_vars, fn_output) = {
+            let mut fn_ctx = Context::frame_fn(self, vars, args);
+            if let Err(e) = fn_ctx.execute_code(&user_fn.code, &user_fn.source) {
+                return Err(e.into());
+            }
 
-        // handle (return) kw and RT errors inside functions
-        if let Err(e) = fn_ctx.execute_code(&user_fn.code, &user_fn.source) {
-            return Err(e.into());
-        }
-
-        let output = fn_ctx.stack.into_vec();
+            let output = fn_ctx.stack.into_vec();
+            (fn_ctx.vars, fn_ctx.global_vars, output)
+        };
         if let FnScope::Global = user_fn.scope {
-            self.vars.extend(fn_ctx.vars);
+            self.global_vars.extend(fn_vars);
         }
+        self.global_vars.extend(fn_global_vars);
+
         if let Some(out_tt) = &user_fn.output_types {
-            let err = match trc.check_outputs(out_tt, &output) {
+            let err = match trc.check_outputs(out_tt, &fn_output) {
                 Ok(()) => None,
                 Err(TypedOutputError::TypeError(t, v)) => Some(Rtk::Type(t, Box::new(v))),
                 Err(TypedOutputError::OutputCountError { expected, got }) => {
@@ -603,7 +607,7 @@ impl<'p> Context<'p> {
                 return Err(err.into());
             }
         }
-        Ok(output)
+        Ok(fn_output)
     }
 
     fn try_execute_builtin(&mut self, fn_name: &str, source: &Path) -> MixedResult<Option<()>> {
@@ -784,7 +788,7 @@ impl<'p> Context<'p> {
                 let name = stack_pop!(
                     (self.stack) -> str as "name" for fn_name
                 )?;
-                match self.vars.get(&name) {
+                match self.find_var(&name) {
                     None => {
                         return Err(Rtk::NoSuchVariable(name).into());
                     }
@@ -1017,7 +1021,14 @@ impl<'p> Context<'p> {
             .map(|r| r.map_err(|e| e.into_runtime_error_kind(name.to_string())))
             .or(self.parent.as_ref().and_then(|p| p.find_method(name)))
     }
+    fn find_var(&self, name: &str) -> Option<&Value> {
+        self.internal_find_var(name)
+            .or(self.parent.as_ref().and_then(|p| p.find_var(name)))
+    }
 
+    fn internal_find_var(&self, name: &str) -> Option<&Value> {
+        self.vars.get(name).or(self.global_vars.get(name))
+    }
     fn interal_find_arg(&self, name: &ArgName) -> Option<Value> {
         if let Some(args) = &self.args {
             args.get(name).map(|arg| arg.0.clone())

@@ -23,7 +23,8 @@ fn debug_stack_pretty(ctx: &mut RuntimeContext, _: &Path) {
     eprintln!("{}", ctx.stack);
 }
 fn debug_vars(ctx: &mut RuntimeContext, _: &Path) {
-    eprintln!("{:?}", ctx.vars);
+    eprintln!("local: {:?}", ctx.vars);
+    eprintln!("global: {:?}", ctx.global_vars);
 }
 fn debug_args(ctx: &mut RuntimeContext, _: &Path) {
     eprintln!("{:?}", ctx.args);
