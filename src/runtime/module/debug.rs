@@ -39,7 +39,7 @@ fn debug_generics(ctx: &mut RuntimeContext, _: &Path) {
     eprintln!("{:?}", ctx.trc);
 }
 fn debug_ctx(ctx: &mut RuntimeContext, _: &Path) {
-    eprintln!("{:?}", ctx);
+    eprintln!("{ctx:?}");
 }
 
 pub fn make() -> Module {

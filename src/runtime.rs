@@ -6,6 +6,7 @@ use stack::*;
 use crate::*;
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -31,12 +32,31 @@ impl Default for ExecAllowOptions {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 enum RuntimeError {
-    #[error(transparent)]
-    RuntimeCtx(#[from] RuntimeErrorCtx),
-    #[error(transparent)]
-    RuntimeRaw(#[from] RuntimeErrorKind),
+    RuntimeCtx(RuntimeErrorCtx),
+    RuntimeRaw(RuntimeErrorKind),
+}
+
+impl From<RuntimeErrorKind> for RuntimeError {
+    fn from(value: RuntimeErrorKind) -> Self {
+        Self::RuntimeRaw(value)
+    }
+}
+
+impl From<RuntimeErrorCtx> for RuntimeError {
+    fn from(value: RuntimeErrorCtx) -> Self {
+        Self::RuntimeCtx(value)
+    }
+}
+
+impl Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RuntimeError::RuntimeCtx(c) => c.fmt(f),
+            RuntimeError::RuntimeRaw(r) => r.fmt(f),
+        }
+    }
 }
 
 impl RuntimeError {
@@ -1006,7 +1026,7 @@ impl<'p> Context<'p> {
     }
 }
 
-impl<'p> Context<'p> {
+impl Context<'_> {
     fn find_arg(&self, name: &ArgName) -> Option<Value> {
         self.interal_find_arg(name)
             .or(self.parent.as_ref().and_then(|p| p.find_arg(name)))
