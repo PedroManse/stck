@@ -12,6 +12,7 @@
 (include math.stck)
 (include error.stck)
 (include string.stck)
+(include vars.stck)
 
 (include argv.stck)
 (include print.stck)
