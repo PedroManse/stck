@@ -1020,7 +1020,7 @@ impl<'p> Context<'p> {
     }
 }
 
-impl<'p> Context<'p> {
+impl Context<'_> {
     fn find_arg(&self, name: &ArgName) -> Option<Value> {
         self.interal_find_arg(name)
             .or(self.parent.as_ref().and_then(|p| p.find_arg(name)))

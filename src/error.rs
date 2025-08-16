@@ -261,7 +261,9 @@ impl Display for StckError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::Io(i) => return i.fmt(f),
-            Self::CantReadFile(fl) => format!("Cant' read file {fl:?}"),
+            Self::CantReadFile(fl) => {
+                format!("Cant' read file {}", fl.display().to_string().green())
+            }
             Self::ParseInt(e) => return e.fmt(f),
             Self::ParseFloat(e) => return e.fmt(f),
             Self::NoSectionToClose(range) => {
@@ -444,10 +446,10 @@ impl Display for RuntimeErrorKind {
                 "Error".bright_yellow()
             ),
             Self::UnwrapOptionBuiltinFailed => {
-                format!("Found missing value while exeuting `!` on an Option")
+                "Found missing value while exeuting `!` on an Option".to_string()
             }
             Self::Compare { this, that } => format!("Can't compare {this} with {that}"),
-            Self::SwitchCaseWithNoValue => format!("Switch case with no value"),
+            Self::SwitchCaseWithNoValue => "Switch case with no value".to_string(),
             Self::Type(t, v) => format!(
                 "Expected type: {t} got value {v}: {ty}",
                 ty = TypeTester::from(v.as_ref())
