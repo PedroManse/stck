@@ -8,6 +8,16 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+macro_rules! impl_from {
+    ($atom:ty => $container:tt by $transform:path) => {
+        impl From<$atom> for $container {
+            fn from(value: $atom) -> Self {
+                $transform(value)
+            }
+        }
+    };
+}
+
 /// # The error of highest order of the stck lib
 ///
 /// Keeps either a [`Runtime error`](RuntimeErrorCtx) of [another type of error](StckError)
@@ -17,17 +27,9 @@ pub enum Error {
     RuntimeError(RuntimeErrorCtx),
 }
 
-impl From<StckError> for Error {
-    fn from(value: StckError) -> Self {
-        Self::Anoter(value)
-    }
-}
-
-impl From<RuntimeErrorCtx> for Error {
-    fn from(value: RuntimeErrorCtx) -> Self {
-        Self::RuntimeError(value)
-    }
-}
+impl std::error::Error for Error {}
+impl_from!(StckError => Error by Error::Anoter);
+impl_from!(RuntimeErrorCtx => Error by Error::RuntimeError);
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -143,6 +145,20 @@ pub struct RuntimeErrorCtx {
     pub(crate) stack: Vec<ErrCtx>,
 }
 
+impl Display for RuntimeErrorCtx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{} doing {}", "Error".red(), self.ctx)?;
+        writeln!(f, "{}", self.kind)?;
+        if !self.stack.is_empty() {
+            writeln!(f, "{} {}", "!".on_bright_red(), self.ctx)?;
+            for ctx in &self.stack {
+                writeln!(f, "{} {}", ">".bright_blue(), ctx)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl RuntimeErrorCtx {
     pub(crate) fn new(ctx: ErrCtx, kind: RuntimeErrorKind) -> Self {
         Self {
@@ -213,45 +229,81 @@ pub enum UnauthorizedAction {
 /// # An error from `stck`
 ///
 /// A failure that doesn't occour during the runtime of the stck script, but at some other time
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 #[cfg_attr(not(feature = "exhaustive-errors"), non_exhaustive)]
 pub enum StckError {
-    #[error("Can't read file {0:?}")]
+    Io(std::io::Error),
+    ParseInt(std::num::ParseIntError),
+    ParseFloat(std::num::ParseFloatError),
+
     CantReadFile(PathBuf),
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error(transparent)]
-    ParseInt(#[from] std::num::ParseIntError),
-    #[error(transparent)]
-    ParseFloat(#[from] std::num::ParseFloatError),
-    #[error("No pragma section to (end if), on span {0}")]
     NoSectionToClose(LineRange),
-    #[error("Can't start pragma (else) section on {1:?} (span {0:?})")]
     CantElseCurrentSection(LineRange, Option<crate::preproc::ProcCommand>),
-    #[error("Invalid pragma command: {0}")]
     InvalidPragma(String),
-    #[error("Unexpected end of file while building token {0:?}")]
     UnexpectedEOF(token::State),
-    #[error("Tokenizer: No impl for {0:?} with {1:?}")]
     CantTokenizerChar(token::State, char),
-    #[error(
-        "Parser in file {path}: State ({0:?}): {state} doesn't accept token: {1:?}",
-        path=.2.display().to_string().green(),
-        state=.0.to_string().yellow()
-    )]
     CantParseToken(parse::State, Box<TokenCont>, PathBuf),
-    #[error("Unknown keyword: {0}")]
     UnknownKeyword(String),
-    #[error("Can't make closure with zero arguments, it's code spans these bytes: {span}")]
     CantInstanceClosureZeroArgs { span: LineRange },
-    #[error("Parser in file {path}: Can only user param list or '*' as function arguments, not {0}", path=.1.display())]
     WrongParamList(String, PathBuf),
-    #[error("Type `{0}` doesn't exist")]
     UnknownType(String),
-    #[error("Can't parse TRC `{0}`, missing name")]
     TRCMissingName(String),
-    #[error("Hosts can't make modules with the # prefix (sign of builtin module)")]
     UserModuleWithBang(String),
+}
+
+impl_from!(std::io::Error => StckError by StckError::Io);
+impl_from!(std::num::ParseIntError => StckError by StckError::ParseInt);
+impl_from!(std::num::ParseFloatError => StckError by StckError::ParseFloat);
+
+impl std::error::Error for StckError {}
+
+impl Display for StckError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Io(i) => return i.fmt(f),
+            Self::CantReadFile(fl) => format!("Cant' read file {fl:?}"),
+            Self::ParseInt(e) => return e.fmt(f),
+            Self::ParseFloat(e) => return e.fmt(f),
+            Self::NoSectionToClose(range) => {
+                format!("No pragma section to (end if), on span {range}")
+            }
+            Self::CantElseCurrentSection(range, cmd) => {
+                format!("Can't start pragma (else) section on {cmd:?} (span {range:?})")
+            }
+            Self::InvalidPragma(cmd) => format!("Invalid pragma command: {cmd}"),
+            Self::UnexpectedEOF(state) => {
+                format!("Unexpected end of file while building token {state:?}")
+            }
+            Self::CantTokenizerChar(state, chr) => {
+                format!("Tokenizer: No impl for {state:?} with {chr:?}")
+            }
+            Self::CantParseToken(state, tkn, file) => {
+                format!(
+                    "Parser in file {path}: State ({state:?}): {state} doesn't accept token: {tkn:?}",
+                    path = file.display().to_string().green(),
+                    state = state.to_string().yellow()
+                )
+            }
+            Self::UnknownKeyword(kw) => format!("Unknown keyword: {kw}"),
+            Self::CantInstanceClosureZeroArgs { span } => format!(
+                "Can't make closure with zero arguments, it's code spans these bytes: {span}"
+            ),
+            Self::WrongParamList(st, file) => {
+                format!(
+                    "Parser in file {path}: Can only user param list or '*' as function arguments, not {st}",
+                    path = file.display().to_string().green()
+                )
+            }
+            Self::UnknownType(t) => format!("Type `{t}` doesn't exist"),
+            Self::TRCMissingName(name) => format!("Can't parse TRC `{name}`, missing name"),
+            Self::UserModuleWithBang(modname) => {
+                format!(
+                    "Hosts can't make modules with the # prefix (sign of builtin module), tried to make {modname}"
+                )
+            }
+        };
+        f.write_str(&s)
+    }
 }
 
 /// # A runtime error
@@ -350,6 +402,8 @@ pub enum RuntimeErrorKind {
     ),
     DisallowedAction(UnauthorizedAction),
 }
+
+impl std::error::Error for RuntimeErrorKind {}
 
 impl Display for RuntimeErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

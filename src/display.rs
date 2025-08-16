@@ -157,20 +157,6 @@ impl Display for ErrCtx {
     }
 }
 
-impl Display for RuntimeErrorCtx {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{} doing {}", "Error".red(), self.ctx)?;
-        writeln!(f, "{}", self.kind)?;
-        if !self.stack.is_empty() {
-            writeln!(f, "{} {}", "!".on_bright_red(), self.ctx)?;
-            for ctx in &self.stack {
-                writeln!(f, "{} {}", ">".bright_blue(), ctx)?;
-            }
-        }
-        Ok(())
-    }
-}
-
 impl Display for LineRange {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.delta() == 0 {
