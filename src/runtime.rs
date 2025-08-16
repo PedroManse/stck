@@ -708,6 +708,27 @@ impl<'p> Context<'p> {
                 )?;
                 self.stack.push_this(lhs * rhs);
             }
+            "/" => {
+                let rhs = stack_pop!(
+                    (self.stack) -> num as "rhs" for fn_name
+                )?;
+                let lhs = stack_pop!(
+                    (self.stack) -> num as "lhs" for fn_name
+                )?;
+                let r = lhs
+                    .checked_div(rhs)
+                    .ok_or(RuntimeErrorKind::DivByZero(lhs))?;
+                self.stack.push_this(r);
+            }
+            "./" => {
+                let rhs = stack_pop!(
+                    (self.stack) -> float as "rhs" for fn_name
+                )?;
+                let lhs = stack_pop!(
+                    (self.stack) -> float as "lhs" for fn_name
+                )?;
+                self.stack.push_this(lhs / rhs);
+            }
             "≃" => {
                 use Value::*;
                 let rhs = stack_pop!((self.stack) -> * as "rhs" for fn_name)?;

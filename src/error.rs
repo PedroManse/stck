@@ -34,8 +34,8 @@ impl_from!(RuntimeErrorCtx => Error by Error::RuntimeError);
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::RuntimeError(r) => r.fmt(f),
-            Self::Anoter(a) => a.fmt(f),
+            Self::RuntimeError(r) => write!(f, "{r}"),
+            Self::Anoter(a) => write!(f, "{a}"),
         }
     }
 }
@@ -281,7 +281,7 @@ impl Display for StckError {
             }
             Self::CantParseToken(state, tkn, file) => {
                 format!(
-                    "Parser in file {path}: State ({state:?}): {state} doesn't accept token: {tkn:?}",
+                    "Parser in file {path}: State {state} doesn't accept token: {tkn:?}",
                     path = file.display().to_string().green(),
                     state = state.to_string().yellow()
                 )
@@ -403,6 +403,7 @@ pub enum RuntimeErrorKind {
         Rc<UserStructDef>,
     ),
     DisallowedAction(UnauthorizedAction),
+    DivByZero(isize),
 }
 
 impl std::error::Error for RuntimeErrorKind {}
@@ -514,6 +515,7 @@ impl Display for RuntimeErrorKind {
                 format!("Wrong value, {val}, for type {typ}, while doing {meth:?} on {user_struct}")
             }
             Self::DisallowedAction(act) => format!("Tried to execute dissalowed action: {act}"),
+            Self::DivByZero(n) => format!("Tried to divide {n} by zero"),
         };
         f.write_str(&s)
     }

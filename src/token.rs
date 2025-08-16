@@ -44,7 +44,7 @@ macro_rules! matches {
         'a'..='z' | 'A'..='Z' | '_' | '-' | '&'
     };
     (ident) => {
-        (matches!(start_ident) | matches!(digit) | '/' | '\'' | '-')
+        (matches!(start_ident) | matches!(digit) | '\'' | '-')
     };
     (arg_type) => {
         (matches!(letter) | matches!(space) | '?' | '*')
@@ -53,7 +53,7 @@ macro_rules! matches {
         'a'..='z' | 'A'..='Z'
     };
     (start_ident) => {
-        'a'..='z' | 'A'..='Z' | '+' | '_' | '%' | '!' | '?' | '$' | '=' | '*' | '&' | '<' | '>' | '≃' | ',' | ':' | '~' | '@' | '.'
+        'a'..='z' | 'A'..='Z' | '+' | '_' | '%' | '!' | '?' | '$' | '=' | '/' | '*' | '&' | '<' | '>' | '≃' | ',' | ':' | '~' | '@' | '.'
     };
     (word_edge) => {
         '(' | ')' | '{' | '}' | '[' | ']'
