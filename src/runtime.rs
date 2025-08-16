@@ -797,6 +797,12 @@ impl<'p> Context<'p> {
                     }
                 }
             }
+            "try-get" => {
+                let name = stack_pop!(
+                    (self.stack) -> str as "name" for fn_name
+                )?;
+                self.stack.push_this(self.find_var(&name).cloned());
+            }
 
             // seq error handeling
             "!" => {
