@@ -4,7 +4,6 @@
 (fn) [ a<num> b<num> ] [ r<num> ] div {
 	a b /
 }
-
 10 0 (try div) prt
 
-[ a b ] { a b / ! }
+[ a b ] { a b / } 10 @ 3 (try @) prt
