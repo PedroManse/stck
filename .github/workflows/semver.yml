@@ -2,7 +2,7 @@ name: SemVer
 
 on:
   pull_request:
-    branches: [ "dev" "dev-next" ]
+    branches: [ "dev", "dev-next" ]
 
 jobs:
   SemVerCheck:
