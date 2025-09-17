@@ -14,8 +14,10 @@ ci() {
 	pushd $1
 	set -x
 
-	cargo build
 	cargo fmt
+	cargo build
+	cargo doc
+	cargo test
 	cargo clippy $fix $allow_dirty --all-targets --all-features -- \
 		-Dclippy::perf \
 		-Dclippy::style \
@@ -30,7 +32,6 @@ ci() {
 		-Aclippy::cast_sign_loss \
 		-Aclippy::cast_possible_wrap \
 		-Aclippy::cast_possible_truncation
-	cargo test
 
 	set +x
 	popd
