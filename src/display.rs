@@ -81,8 +81,8 @@ impl Display for TypeTester {
 impl Display for ExprCont {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Immediate(Value::Closure(cl)) => {
-                write!(f, "instantiate Closure at {cl:p}")
+            Self::MakeClosure(cl) => {
+                write!(f, "Instantiate Closure {cl:p}")
             }
             Self::Immediate(v) => {
                 write!(f, "Push value {v:?}")
@@ -100,6 +100,8 @@ impl Display for ExprCont {
             Self::Keyword(k) => {
                 write!(f, "Keyword: ")?;
                 match k {
+                    KeywordKind::TryClosure => write!(f, "Try executing closure"),
+                    KeywordKind::Try { fn_name } => write!(f, "Try executing function {fn_name}"),
                     KeywordKind::Structure { name, .. } => write!(f, "Struct {name}"),
                     KeywordKind::Require(mn) => write!(f, "Require module {mn}"),
                     KeywordKind::DefinedGeneric(g) => write!(f, "Define generic {g:?}"),
@@ -154,20 +156,6 @@ impl Display for ErrCtx {
             self.source.display().to_string().green(),
             self.lines.to_string().bright_magenta().underline(),
         )
-    }
-}
-
-impl Display for RuntimeErrorCtx {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{} doing {}", "Error".red(), self.ctx)?;
-        writeln!(f, "{}", self.kind)?;
-        if !self.stack.is_empty() {
-            writeln!(f, "{} {}", "!".on_bright_red(), self.ctx)?;
-            for ctx in &self.stack {
-                writeln!(f, "{} {}", ">".bright_blue(), ctx)?;
-            }
-        }
-        Ok(())
     }
 }
 

@@ -5,7 +5,7 @@
 //!
 //! They can be created with [`Module::empty`], named [Hooks](Hook) can be added with
 //! [`Module::add_fn`] and can be registered on a runtime with
-//! [`RuntimeContext::register_module`](crate::RuntimeContext::register_module), then all the
+//! [`RuntimeContext::register_modules`](crate::RuntimeContext::register_modules), then all the
 //! functions from the module will be avaliable to the user by their name as if they where builtin.
 //!
 //! After registering a module it's impossible to remove it's functions from a runtime context.

@@ -532,7 +532,7 @@ impl From<&Value> for TypeTester {
             }
             Value::Map(_) => todo!("map"),
             Value::Array(_) => todo!("array"),
-            Value::Result(_) => todo!("result"),
+            Value::Result(v) => todo!("result {v:?}"),
             Value::Option(a) => a
                 .clone()
                 .map(|tt| TypeTester::from(tt.as_ref()))

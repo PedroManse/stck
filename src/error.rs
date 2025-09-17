@@ -3,20 +3,41 @@
 use super::*;
 use crate::cache::FileCacher;
 use colored::Colorize;
-use std::collections::hash_map::HashMap;
+use std::fmt::Display;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+macro_rules! impl_from {
+    ($atom:ty => $container:tt by $transform:path) => {
+        impl From<$atom> for $container {
+            fn from(value: $atom) -> Self {
+                $transform(value)
+            }
+        }
+    };
+}
+
 /// # The error of highest order of the stck lib
 ///
 /// Keeps either a [`Runtime error`](RuntimeErrorCtx) of [another type of error](StckError)
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum Error {
-    #[error(transparent)]
-    Anoter(#[from] StckError),
-    #[error(transparent)]
-    RuntimeError(#[from] RuntimeErrorCtx),
+    Anoter(StckError),
+    RuntimeError(RuntimeErrorCtx),
+}
+
+impl std::error::Error for Error {}
+impl_from!(StckError => Error by Error::Anoter);
+impl_from!(RuntimeErrorCtx => Error by Error::RuntimeError);
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RuntimeError(r) => write!(f, "{r}"),
+            Self::Anoter(a) => write!(f, "{a}"),
+        }
+    }
 }
 
 /// # The context of a runtime error
@@ -124,6 +145,20 @@ pub struct RuntimeErrorCtx {
     pub(crate) stack: Vec<ErrCtx>,
 }
 
+impl Display for RuntimeErrorCtx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{} doing {}", "Error".red(), self.ctx)?;
+        writeln!(f, "{}", self.kind)?;
+        if !self.stack.is_empty() {
+            writeln!(f, "{} {}", "!".on_bright_red(), self.ctx)?;
+            for ctx in &self.stack {
+                writeln!(f, "{} {}", ">".bright_blue(), ctx)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl RuntimeErrorCtx {
     pub(crate) fn new(ctx: ErrCtx, kind: RuntimeErrorKind) -> Self {
         Self {
@@ -194,48 +229,83 @@ pub enum UnauthorizedAction {
 /// # An error from `stck`
 ///
 /// A failure that doesn't occour during the runtime of the stck script, but at some other time
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 #[cfg_attr(not(feature = "exhaustive-errors"), non_exhaustive)]
 pub enum StckError {
-    #[error("Can't read file {0:?}")]
+    Io(std::io::Error),
+    ParseInt(std::num::ParseIntError),
+    ParseFloat(std::num::ParseFloatError),
+
     CantReadFile(PathBuf),
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error(transparent)]
-    ParseInt(#[from] std::num::ParseIntError),
-    #[error(transparent)]
-    ParseFloat(#[from] std::num::ParseFloatError),
-    #[error("No pragma section to (end if), on span {0}")]
     NoSectionToClose(LineRange),
-    #[error("Can't start pragma (else) section on {1:?} (span {0:?})")]
     CantElseCurrentSection(LineRange, Option<crate::preproc::ProcCommand>),
-    #[error("Invalid pragma command: {0}")]
     InvalidPragma(String),
-    #[error("Unexpected end of file while building token {0:?}")]
     UnexpectedEOF(token::State),
-    #[error("Tokenizer: No impl for {0:?} with {1:?}")]
     CantTokenizerChar(token::State, char),
-    #[error(
-        "Parser in file {path}: State ({0:?}): {state} doesn't accept token: {1:?}",
-        path=.2.display().to_string().green(),
-        state=.0.to_string().yellow()
-    )]
     CantParseToken(parse::State, Box<TokenCont>, PathBuf),
-    #[error("Unknown keyword: {0}")]
     UnknownKeyword(String),
-    #[deprecated]
-    #[error("Missing char")]
-    MissingChar,
-    #[error("Can't make closure with zero arguments, it's code spans these bytes: {span}")]
     CantInstanceClosureZeroArgs { span: LineRange },
-    #[error("Parser in file {path}: Can only user param list or '*' as function arguments, not {0}", path=.1.display())]
     WrongParamList(String, PathBuf),
-    #[error("Type `{0}` doesn't exist")]
     UnknownType(String),
-    #[error("Can't parse TRC `{0}`, missing name")]
     TRCMissingName(String),
-    #[error("Hosts can't make modules with the # prefix (sign of builtin module)")]
     UserModuleWithBang(String),
+}
+
+impl_from!(std::io::Error => StckError by StckError::Io);
+impl_from!(std::num::ParseIntError => StckError by StckError::ParseInt);
+impl_from!(std::num::ParseFloatError => StckError by StckError::ParseFloat);
+
+impl std::error::Error for StckError {}
+
+impl Display for StckError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Io(i) => return i.fmt(f),
+            Self::CantReadFile(fl) => {
+                format!("Cant' read file {}", fl.display().to_string().green())
+            }
+            Self::ParseInt(e) => return e.fmt(f),
+            Self::ParseFloat(e) => return e.fmt(f),
+            Self::NoSectionToClose(range) => {
+                format!("No pragma section to (end if), on span {range}")
+            }
+            Self::CantElseCurrentSection(range, cmd) => {
+                format!("Can't start pragma (else) section on {cmd:?} (span {range:?})")
+            }
+            Self::InvalidPragma(cmd) => format!("Invalid pragma command: {cmd}"),
+            Self::UnexpectedEOF(state) => {
+                format!("Unexpected end of file while building token {state:?}")
+            }
+            Self::CantTokenizerChar(state, chr) => {
+                format!("Tokenizer: No impl for {state:?} with {chr:?}")
+            }
+            Self::CantParseToken(state, tkn, file) => {
+                format!(
+                    "Parser in file {path}: State {state} doesn't accept token: {tkn:?}",
+                    path = file.display().to_string().green(),
+                    state = state.to_string().yellow()
+                )
+            }
+            Self::UnknownKeyword(kw) => format!("Unknown keyword: {kw}"),
+            Self::CantInstanceClosureZeroArgs { span } => format!(
+                "Can't make closure with zero arguments, it's code spans these bytes: {span}"
+            ),
+            Self::WrongParamList(st, file) => {
+                format!(
+                    "Parser in file {path}: Can only user param list or '*' as function arguments, not {st}",
+                    path = file.display().to_string().green()
+                )
+            }
+            Self::UnknownType(t) => format!("Type `{t}` doesn't exist"),
+            Self::TRCMissingName(name) => format!("Can't parse TRC `{name}`, missing name"),
+            Self::UserModuleWithBang(modname) => {
+                format!(
+                    "Hosts can't make modules with the # prefix (sign of builtin module), tried to make {modname}"
+                )
+            }
+        };
+        f.write_str(&s)
+    }
 }
 
 /// # A runtime error
@@ -243,69 +313,57 @@ pub enum StckError {
 /// An error that can be caught during a failure while trying to execute a stck script
 ///
 /// This is usually wrapped by a [context](RuntimeErrorCtx) to display more information
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 #[cfg_attr(not(feature = "exhaustive-errors"), non_exhaustive)]
 pub enum RuntimeErrorKind {
-    #[error("Not enough arguments to execute {name}, got {got:?} needs {needs:?}")]
     UserFnMissingArgs {
         name: String,
         got: Vec<Value>,
         needs: Vec<String>,
     },
-    #[error("Found {} while executing `!` on a Result: {error}", "Error".bright_yellow())]
-    UnwrapResultBuiltinFailed { error: Value },
-    #[error("Found missing value while exeuting `!` on an Option")]
+    UnwrapResultBuiltinFailed {
+        error: Value,
+    },
     UnwrapOptionBuiltinFailed,
-    #[error("Can't compare {this} with {that}")]
-    Compare { this: Value, that: Value },
-    #[error("Switch case with no value")]
+    Compare {
+        this: Value,
+        that: Value,
+    },
     SwitchCaseWithNoValue,
-    #[error(
-        "`%%` ({0}) doesn't recognise the format directive `{1}`, only '%', 'd', 's', 'v', 'V' and 'b' are avaliable"
-    )]
     UnknownStringFormat(String, char),
-    #[error("`%%` ({0}) Can't capture any value, the stack is empty")]
     MissingValue(String, char),
-    #[error("`%%` ({0}) The provided value, {1}, can't be formatted with `{2}`")]
     WrongValueType(String, Value, char),
-    #[error("Expected type: {0} got value {1}: {ty}", ty=TypeTester::from(.1.as_ref()))]
     Type(TypeTester, Box<Value>),
-    #[error("Expected type: {0} got {1}")]
     TypeType(TypeTester, TypeTester),
-    #[error("Output of function `{fn_name}` error, Expected {expected:?} got {got:?}")]
     OutputCount {
         fn_name: String,
         expected: usize,
         got: usize,
     },
-    #[error("Output of closure error, Expected {expected:?} got {got:?}")]
-    OutputClosureCount { expected: usize, got: usize },
-    #[error("No such user-defined function `{0}`")]
+    OutputClosureCount {
+        expected: usize,
+        got: usize,
+    },
     MissingUserFunction(String),
-    #[error("WrongStackSizeDiffOnCheck {old_stack_size} -> {new_stack_size}")]
     WrongStackSizeDiffOnCheck {
         old_stack_size: usize,
         new_stack_size: usize,
         new_should_stack_size: usize,
     },
-    #[error("check blocks must recieve one boolean, recieved {got}")]
-    WrongTypeOnCheck { got: Value },
-    #[error("Function {for_fn} accepts [{args}]. But {this_arg} is missing")]
+    WrongTypeOnCheck {
+        got: Value,
+    },
     MissingValueForBuiltin {
         for_fn: String,
         args: String,
         this_arg: &'static str,
     },
-    #[error("Function {for_fn} accepts {args}. But {missing} args are missing")]
     MissingValuesForBuiltin {
         for_fn: String,
         args: &'static str,
         missing: isize,
     },
-    #[error(
-        "Function {for_fn} accepts {args}. But [{this_arg}] must be a {expected} and got {got}"
-    )]
     WrongTypeForBuiltin {
         for_fn: String,
         args: &'static str,
@@ -313,58 +371,152 @@ pub enum RuntimeErrorKind {
         got: Box<Value>,
         expected: &'static str,
     },
-    #[error("The variable {0} is not defined")]
     NoSuchVariable(String),
-    #[error(
-        "Can't make function ({fn_name}) that takes no arguments into closure, since that would never be executed"
-    )]
-    CantMakeFnIntoClosureZeroArgs { fn_name: String },
-    #[error(
-        "Can't make function ({fn_name}) that takes entire stack into closure, since it would never be executed"
-    )]
-    CantMakeFnIntoClosureAllStack { fn_name: String },
-    #[error("Can't make closure with zero arguments, it's code spans these bytes: {span:?}")]
-    CantInstanceClosureZeroArgs { span: Range<usize> },
-    #[error(
-        "Closure's arguments ({:?}) are filled, but still tried to add more",
-        closure_args
-    )]
-    DEVFillFullClosure { closure_args: ClosurePartialArgs },
-    #[error(
-        "Closure's arguments ({closure_args:?})'s parent function values are beeing reset with {parent_args:?}"
-    )]
-    DEVResettingParentValuesForClosure {
-        closure_args: Box<ClosurePartialArgs>,
-        parent_args: HashMap<ArgName, FnArg>,
+    CantMakeFnIntoClosureZeroArgs {
+        fn_name: String,
     },
-    #[error(
-        "DEV ERROR, this error should never appear to you:\nThe struct {0}, with method {1:?}, tried using field with index {2}; {3}"
-    )]
+    CantMakeFnIntoClosureAllStack {
+        fn_name: String,
+    },
+    CantInstanceClosureZeroArgs {
+        span: Range<usize>,
+    },
+    DEVFillFullClosure {
+        closure_args: ClosurePartialArgs,
+    },
     DEVWrongIndexOnUserStructField(
         Rc<UserStructDef>,
         UserStructMethod,
         usize,
         Box<UserStructInstance>,
     ),
-    #[error("No such function or function argument called `{0}`")]
     MissingIdent(String),
-    #[error("Module `{0}` is required but was not loaded")]
     MissingModule(String),
-    #[error("Method {0}'s fieldless action doesn't exist")]
     NoSuchFieldlessAction(String),
-    #[error("Method {0}'s field doesn't exist")]
     NoSuchField(String),
-    #[error("Method {0}'s action doesn't exist")]
     NoSuchAction(String),
-    #[error("Not enough arguments to make {0}")]
     NotEnoughArgsForNew(Rc<UserStructDef>),
-    #[error("Wrong value, {0}, for type {1}, while doing {2:?} on {3}")]
     WrongTypeForMethod(
         Box<Value>,
         Box<TypeTester>,
         UserStructMethod,
         Rc<UserStructDef>,
     ),
-    #[error("Tried to execute dissalowed action: {0}")]
     DisallowedAction(UnauthorizedAction),
+    DivByZero(isize),
+}
+
+impl std::error::Error for RuntimeErrorKind {}
+
+impl Display for RuntimeErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::DEVWrongIndexOnUserStructField(user_struct, method, index, instance) => format!(
+                "DEV ERROR, this error should never appear to you:\nThe struct {user_struct}, with method {method:?}, tried using field with index {index}; {instance}"
+            ),
+            Self::DEVFillFullClosure { closure_args } => {
+                format!(
+                    "Closure's arguments ({closure_args:?}) are filled, but still tried to add more",
+                )
+            }
+            Self::CantInstanceClosureZeroArgs { span } => format!(
+                "Can't make closure with zero arguments, it's code spans these bytes: {span:?}"
+            ),
+            Self::CantMakeFnIntoClosureAllStack { fn_name } => format!(
+                "Can't make function ({fn_name}) that takes entire stack into closure, since it would never be executed"
+            ),
+            Self::CantMakeFnIntoClosureZeroArgs { fn_name } => format!(
+                "Can't make function ({fn_name}) that takes no arguments into closure, since that would never be executed"
+            ),
+            Self::WrongValueType(s, v, c) => {
+                format!("`%%` ({s}) The provided value, {v}, can't be formatted with `{c}`")
+            }
+            Self::MissingValue(s, _) => {
+                format!("`%%` ({s}) Can't capture any value, the stack is empty")
+            }
+            Self::UnknownStringFormat(s, c) => {
+                format!(
+                    "`%%` ({s}) doesn't recognise the format directive `{c}`, only '%', 'd', 's', 'v', 'V' and 'b' are avaliable"
+                )
+            }
+            Self::UserFnMissingArgs { name, got, needs } => {
+                format!("Not enough arguments to execute {name}, got {got:?} needs {needs:?}")
+            }
+            Self::UnwrapResultBuiltinFailed { error } => format!(
+                "Found {} while executing `!` on a Result: {error}",
+                "Error".bright_yellow()
+            ),
+            Self::UnwrapOptionBuiltinFailed => {
+                "Found missing value while exeuting `!` on an Option".to_string()
+            }
+            Self::Compare { this, that } => format!("Can't compare {this} with {that}"),
+            Self::SwitchCaseWithNoValue => "Switch case with no value".to_string(),
+            Self::Type(t, v) => format!(
+                "Expected type: {t} got value {v}: {ty}",
+                ty = TypeTester::from(v.as_ref())
+            ),
+            Self::TypeType(t1, t2) => format!("Expected type: {t1} got {t2}"),
+            Self::OutputCount {
+                fn_name,
+                expected,
+                got,
+            } => format!("Output of function `{fn_name}` error, Expected {expected:?} got {got:?}"),
+            Self::OutputClosureCount { expected, got } => {
+                format!("Output of closure error, Expected {expected:?} got {got:?}")
+            }
+            Self::MissingUserFunction(name) => format!("No such user-defined function `{name}`"),
+            Self::WrongStackSizeDiffOnCheck {
+                old_stack_size,
+                new_stack_size,
+                new_should_stack_size,
+            } => format!(
+                "WrongStackSizeDiffOnCheck {old_stack_size} -> {new_stack_size}, (should be {new_should_stack_size})"
+            ),
+            Self::WrongTypeOnCheck { got } => {
+                format!("check blocks must recieve one boolean, recieved {got}")
+            }
+            Self::MissingValueForBuiltin {
+                for_fn,
+                args,
+                this_arg,
+            } => {
+                format!("Function {for_fn} accepts [{args}]. But {this_arg} is missing")
+            }
+            Self::MissingValuesForBuiltin {
+                for_fn,
+                args,
+                missing,
+            } => {
+                format!("Function {for_fn} accepts {args}. But {missing} args are missing")
+            }
+            Self::WrongTypeForBuiltin {
+                for_fn,
+                args,
+                this_arg,
+                got,
+                expected,
+            } => format!(
+                "Function {for_fn} accepts {args}. But [{this_arg}] must be a {expected} and got {got}"
+            ),
+            Self::NoSuchVariable(name) => format!("The variable {name} is not defined"),
+            Self::MissingIdent(name) => {
+                format!("No such function or function argument called `{name}`")
+            }
+            Self::MissingModule(name) => format!("Module `{name}` is required but was not loaded"),
+            Self::NoSuchFieldlessAction(name) => {
+                format!("Method {name}'s fieldless action doesn't exist")
+            }
+            Self::NoSuchField(name) => format!("Method {name}'s field doesn't exist"),
+            Self::NoSuchAction(name) => format!("Method {name}'s action doesn't exist"),
+            Self::NotEnoughArgsForNew(user_struct) => {
+                format!("Not enough arguments to make {user_struct}")
+            }
+            Self::WrongTypeForMethod(val, typ, meth, user_struct) => {
+                format!("Wrong value, {val}, for type {typ}, while doing {meth:?} on {user_struct}")
+            }
+            Self::DisallowedAction(act) => format!("Tried to execute dissalowed action: {act}"),
+            Self::DivByZero(n) => format!("Tried to divide {n} by zero"),
+        };
+        f.write_str(&s)
+    }
 }

@@ -72,23 +72,31 @@ impl<'p> Context<'p> {
                     Nothing
                 }
                 (Nothing, Str(x)) => {
-                    push_expr!(E::Immediate(Value::Str(x)));
+                    push_expr!(E::Immediate(ImmdValue::Str(x)));
                     Nothing
                 }
                 (Nothing, Number(x)) => {
-                    push_expr!(E::Immediate(Value::Num(x)));
+                    push_expr!(E::Immediate(ImmdValue::Num(x)));
                     Nothing
                 }
                 (Nothing, Float(x)) => {
-                    push_expr!(E::Immediate(Value::Float(x)));
+                    push_expr!(E::Immediate(ImmdValue::Float(x)));
                     Nothing
                 }
                 (Nothing, Char(c)) => {
-                    push_expr!(E::Immediate(Value::Char(c)));
+                    push_expr!(E::Immediate(ImmdValue::Char(c)));
                     Nothing
                 }
                 (Nothing, Keyword(RawKeyword::TRC(trc))) => {
                     push_expr!(E::Keyword(KeywordKind::DefinedGeneric(trc)));
+                    Nothing
+                }
+                (Nothing, Keyword(RawKeyword::Try(fn_name))) => {
+                    push_expr!(E::Keyword(KeywordKind::Try { fn_name }));
+                    Nothing
+                }
+                (Nothing, Keyword(RawKeyword::TryClosure)) => {
+                    push_expr!(E::Keyword(KeywordKind::TryClosure));
                     Nothing
                 }
                 (Nothing, Keyword(RawKeyword::Require(module_name))) => {
@@ -146,13 +154,13 @@ impl<'p> Context<'p> {
                 (MakeClosureBlock(args, outs), Block(code)) => {
                     let mut inner_ctx = Context::new(code, self.source);
                     let code = inner_ctx.parse_block()?;
-                    let closure = Closure {
+                    let closure = MakeClosure {
                         code,
                         trc: TypeResolutionBuilder::new().into(),
-                        request_args: ClosurePartialArgs::parse(args, span.clone())?,
+                        request_args: MakeClosurePartialArgs::parse(args, span.clone())?,
                         output_types: outs.map(TypedOutputs::new),
                     };
-                    push_expr!(E::Immediate(Value::Closure(Box::new(closure))));
+                    push_expr!(E::MakeClosure(closure));
                     Nothing
                 }
 

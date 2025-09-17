@@ -2,13 +2,13 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::{
-    ErrCtx, RuntimeErrorCtx, RuntimeErrorKind, api,
+    ErrCtx, HostContext, RuntimeErrorCtx, RuntimeErrorKind, api,
     cache::Isolated,
     error::Error,
-    internals::{self, RuntimeContext, RustStckFn, Value},
+    internals::{self, ImmdValue, RuntimeContext, RustStckFn, Value},
 };
 
-fn execute_string(cont: &str, test_name: &str) -> Result<RuntimeContext, Error> {
+fn execute_string(cont: &str, test_name: &str) -> Result<HostContext, Error> {
     let mut file_cacher = Isolated::new();
     let tokens = api::get_tokens_str(cont, test_name, &mut file_cacher)?;
     let code = api::parse_raw_tokens(tokens)?;
@@ -288,11 +288,11 @@ fn exec_options() -> Result<(), Error> {
                     check: vec![
                         internals::Expr {
                             span: crate::error::LineRange { start: 2, end: 2 },
-                            cont: internals::ExprCont::Immediate(Value::Num(1)),
+                            cont: internals::ExprCont::Immediate(ImmdValue::Num(1)),
                         },
                         internals::Expr {
                             span: crate::error::LineRange { start: 2, end: 2 },
-                            cont: internals::ExprCont::Immediate(Value::Num(1)),
+                            cont: internals::ExprCont::Immediate(ImmdValue::Num(1)),
                         },
                         internals::Expr {
                             span: crate::error::LineRange { start: 2, end: 2 },
@@ -302,7 +302,7 @@ fn exec_options() -> Result<(), Error> {
                     code: vec![
                         internals::Expr {
                             span: crate::error::LineRange { start: 3, end: 3 },
-                            cont: internals::ExprCont::Immediate(Value::Str("yes".to_string())),
+                            cont: internals::ExprCont::Immediate(ImmdValue::Str("yes".to_string())),
                         },
                         internals::Expr {
                             span: crate::error::LineRange { start: 3, end: 3 },
