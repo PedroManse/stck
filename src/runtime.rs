@@ -74,7 +74,7 @@ type MixedResult<T> = std::result::Result<T, RuntimeError>;
 
 #[derive(Clone, Debug)]
 pub enum Hook {
-    Raw(for<'p> fn(&mut Context<'p>, &Path)),
+    Raw(for<'p> fn(&mut Context, &Path)),
     WithError(for<'p> fn(&mut Context, &Path) -> Result<(), RuntimeErrorKind>),
 }
 
