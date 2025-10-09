@@ -1084,7 +1084,7 @@ impl<'p> Context<'p> {
                 self.stack.push_this(is_type);
             }
             "type$is-result" => {
-                let is_type = stack_pop!((self.stack) -> result as "value" for fn_name)?.is_ok();
+                let is_type = stack_pop!((self.stack) -> result as "value" for fn_name).is_ok();
                 self.stack.push_this(is_type);
             }
             "type$is-option" => {
