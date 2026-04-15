@@ -24,7 +24,7 @@ fn read_file(ctx: &mut RuntimeContext, _: &Path) -> Result<(), RuntimeErrorKind>
 }
 
 fn write_file(ctx: &mut RuntimeContext, _: &Path) -> Result<(), RuntimeErrorKind> {
-    let path = stack_pop!((ctx.stack) -> str as "file path" for "io$read-file")?;
+    let path = stack_pop!((ctx.stack) -> str as "file path" for "io$write-file")?;
     let content = stack_pop!((ctx.stack) -> str as "file content" for "io$read-file")?;
     let file = std::fs::OpenOptions::new().append(true).open(path);
     let mut file = match file {

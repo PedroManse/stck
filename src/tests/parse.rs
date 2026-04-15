@@ -18,7 +18,7 @@ fn parse_tokens() -> Result<(), crate::error::Error> {
     let token_block =
         crate::api::get_tokens_str(text, text_name, &mut crate::cache::Isolated::new())?;
     let expr = crate::api::parse_raw_tokens(token_block)?;
-    test_eq!(got: expr.source, expected: PathBuf::from(text_name));
+    test_eq!(got: expr.source, expected: text_name);
     test_eq!(got: expr.expr_count(), expected: 1);
     let expr_expected: Vec<crate::Expr> = vec![Expr {
         span: LineRange::from_points(2, 4),
