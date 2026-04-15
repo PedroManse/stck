@@ -316,7 +316,7 @@ impl<'p> Context<'p> {
         Ok(match kw {
             KeywordKind::Structure { name, vars } => {
                 let stct = UserStructDef {
-                    name: name.to_string(),
+                    name: name.clone(),
                     fields: vars.iter().cloned().map(UserStructField::from).collect(),
                 };
                 self.user_structures.insert(Rc::new(stct));
@@ -1038,7 +1038,7 @@ impl Context<'_> {
         name: &FnName,
     ) -> Option<Result<(UserStructMethod, Rc<UserStructDef>), RuntimeErrorKind>> {
         self.interal_find_method(name)
-            .map(|r| r.map_err(|e| e.into_runtime_error_kind(name.to_string())))
+            .map(|r| r.map_err(|e| e.into_runtime_error_kind(name.clone())))
             .or(self.parent.as_ref().and_then(|p| p.find_method(name)))
     }
     fn find_var(&self, name: &str) -> Option<&Value> {
